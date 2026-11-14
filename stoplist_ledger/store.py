@@ -63,7 +63,6 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 """
 
-
 class LedgerStore(RecordMixin):
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
@@ -98,12 +97,17 @@ class LedgerStore(RecordMixin):
         return record
 
     # ---- table versions -------------------------------------------------
+    @staticmethod
+    def _version_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+        return LedgerStore._decode(row, "entries_json", "diff_json") if row \
+            else None
+
     def find_by_content(self, content_hash: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM table_versions WHERE content_hash = ?", (content_hash,)
             ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+        return self._version_row(row)
 
     def get_version(self, table_id: str, version: int) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -111,14 +115,14 @@ class LedgerStore(RecordMixin):
                 "SELECT * FROM table_versions WHERE table_id = ? AND version = ?",
                 (table_id, version),
             ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+        return self._version_row(row)
 
     def get_version_by_id(self, version_id: int) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM table_versions WHERE id = ?", (version_id,)
             ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+        return self._version_row(row)
 
     def latest_version(self, table_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -127,18 +131,14 @@ class LedgerStore(RecordMixin):
                 "ORDER BY version DESC LIMIT 1",
                 (table_id,),
             ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+        return self._version_row(row)
 
     def list_versions(self, table_id: str | None = None) -> list[dict[str, Any]]:
-        sql = "SELECT * FROM table_versions"
-        args: tuple[Any, ...] = ()
-        if table_id is not None:
-            sql += " WHERE table_id = ?"
-            args = (table_id,)
-        sql += " ORDER BY table_id, version"
-        with self._connect() as conn:
-            rows = conn.execute(sql, args).fetchall()
-        return [self._decode(row, "entries_json", "diff_json") for row in rows]
+        if table_id is None:
+            return self._fetch_all("table_versions", self._version_row)
+        return self._fetch_all(
+            "table_versions", self._version_row, "table_id = ?", (table_id,)
+        )
 
     def list_tables(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
@@ -203,11 +203,8 @@ class LedgerStore(RecordMixin):
         return payload
 
     def get_compilation(self, compilation_id: int) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM compilations WHERE id = ?", (compilation_id,)
-            ).fetchone()
-        return self._compilation(row) if row else None
+        return self._fetch_one("compilations", compilation_id,
+                               self._compilation)
 
     def latest_compilation(self, name: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -218,9 +215,7 @@ class LedgerStore(RecordMixin):
         return self._compilation(row) if row else None
 
     def list_compilations(self) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM compilations ORDER BY id").fetchall()
-        return [self._compilation(row) for row in rows]
+        return self._fetch_all("compilations", self._compilation)
 
     # ---- audit ----------------------------------------------------------
     def add_audit(self, event: str, subject: str, detail: dict[str, Any],
@@ -233,9 +228,9 @@ class LedgerStore(RecordMixin):
             )
 
     def list_audit(self) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM audit ORDER BY id").fetchall()
-        return [self._decode(row, "detail_json") for row in rows]
+        return self._fetch_all(
+            "audit", lambda row: self._decode(row, "detail_json")
+        )
 
     def summary(self) -> dict[str, int]:
         tables = ("table_versions", "compilations", "snapshots", "checks", "impacts")

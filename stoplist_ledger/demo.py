@@ -20,7 +20,6 @@ from .util import PROJECT_ROOT, display_path, pretty_json
 FIXTURES = PROJECT_ROOT / "fixtures"
 REPORT_KINDS = ("json", "md")
 
-
 def safe_reset(target: Path, var_root: Path, confirmed: bool = False) -> Path:
     """Remove the var tree (or one child), refusing anything outside var_root."""
 
@@ -49,7 +48,6 @@ def safe_reset(target: Path, var_root: Path, confirmed: bool = False) -> Path:
         resolved_target.unlink()
     return resolved_target
 
-
 def register_fixtures(store: LedgerStore, clock: FixedClock,
                       operator: str) -> list[dict[str, Any]]:
     paths = sorted(
@@ -65,7 +63,6 @@ def register_fixtures(store: LedgerStore, clock: FixedClock,
         )
     return registered
 
-
 def _report(payload: dict[str, Any], report_dir: Path, kind: str,
             identifier: str, formats: tuple[str, ...] = ("json", "md")) -> list[str]:
     artifacts = []
@@ -74,7 +71,6 @@ def _report(payload: dict[str, Any], report_dir: Path, kind: str,
         write_report(payload, fmt, path)
         artifacts.append(display_path(path))
     return artifacts
-
 
 def run_demo(var_dir: Path, clock: FixedClock,
              operator: str = "op-demo-01") -> dict[str, Any]:
@@ -118,19 +114,17 @@ def run_demo(var_dir: Path, clock: FixedClock,
     artifacts += _report(check_a, report_dir, "check", comp_a["name"])
     artifacts += _report(check_broken, report_dir, "check",
                          "broken-conflict")
+    def comp_meta(item: dict[str, Any]) -> dict[str, Any]:
+        return {"id": item["id"], "rules_hash": item["rules_hash"],
+                "rule_count": item["rule_count"]}
+
     summary = {
         "kind": "demo",
         "schema_version": 1,
         "generated_at": clock.timestamp(),
         "counts": store.summary(),
-        "compilations": {
-            comp_a["name"]: {"id": comp_a["id"],
-                             "rules_hash": comp_a["rules_hash"],
-                             "rule_count": comp_a["rule_count"]},
-            comp_b["name"]: {"id": comp_b["id"],
-                             "rules_hash": comp_b["rules_hash"],
-                             "rule_count": comp_b["rule_count"]},
-        },
+        "compilations": {comp_a["name"]: comp_meta(comp_a),
+                         comp_b["name"]: comp_meta(comp_b)},
         "snapshots": {
             comp_a["name"]: [_snap_meta(item) for item in snaps_a],
             comp_b["name"]: [_snap_meta(item) for item in snaps_b],
@@ -138,12 +132,12 @@ def run_demo(var_dir: Path, clock: FixedClock,
         "impact": {"id": impact["id"], "report_hash": impact["report_hash"],
                    "summary": impact["summary"]},
         "checks": {
-            comp_a["name"]: {"id": check_a["id"], "status": check_a["status"],
-                             "total_issues": check_a["summary"]["total_issues"]},
-            "broken-conflict": {"id": check_broken["id"],
-                                "status": check_broken["status"],
-                                "total_issues":
-                                    check_broken["summary"]["total_issues"]},
+            comp_a["name"]: {
+                "id": check_a["id"], "status": check_a["status"],
+                "total_issues": check_a["summary"]["total_issues"]},
+            "broken-conflict": {
+                "id": check_broken["id"], "status": check_broken["status"],
+                "total_issues": check_broken["summary"]["total_issues"]},
         },
     }
     summary_paths = []
@@ -157,7 +151,6 @@ def run_demo(var_dir: Path, clock: FixedClock,
                      default_report_path(report_dir, "demo", "summary", fmt))
     return summary
 
-
 def _snap_meta(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": snapshot["id"],
@@ -165,7 +158,6 @@ def _snap_meta(snapshot: dict[str, Any]) -> dict[str, Any]:
         "result_hash": snapshot["result_hash"],
         "summary": snapshot["summary"],
     }
-
 
 def demo_main(var_dir: Path, clock: FixedClock,
               operator: str = "op-demo-01") -> int:

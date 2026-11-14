@@ -96,6 +96,17 @@ tables:
     scopes: ["*"]
 priority: [whitelist, synonym, noise, zh_stop]   # high -> low
 merge_targets: [color, grey]     # optional allow-list
+scope_overrides:                 # optional per-scope override layers
+  lang-zh:
+    priority: [zh_stop, whitelist, synonym, noise]
+    merge_targets: [silver]
+    tables:
+      - id: noise
+        remove: true            # drop the base reference for this scope
+      - id: whitelist
+        version: 2              # whole-row replacement of the base reference
+      - id: zh_only
+        version: 1              # a reference added by the override layer
 ```
 
 Validation rules:
@@ -110,8 +121,34 @@ Validation rules:
 - If `merge_targets` is present, every effective merge target must appear in it
   after declaration-policy normalization.
 
-Compiler failure codes include `E_DECL_INVALID`, `E_BAD_POLICY`,
-`E_REF_NOT_FOUND`, `E_DUP_PRIORITY` and `E_MERGE_TARGET_NOT_ALLOWED`.
+### 5.1 Scope override merge contract
+
+`scope_overrides` maps a scope name to one override layer. Compiling with an
+explicit scope (`compile --scope lang-zh`) merges the base declaration with
+that layer before building the rule tree. A scope without a layer keeps the
+base declaration shape unchanged and, for backward compatibility, the
+compilation payload gains no override fields. The contract is versioned
+(`contract_version: 1`) and serialized into every scoped compilation under
+`scope_override`; each rule's layer is recorded in `rule_origins`.
+
+| Field | Semantics |
+| --- | --- |
+| `tables` | Keyed by table id. A matching id replaces the base reference whole-row; a new id adds one; `{"id": X, "remove": true}` removes the base reference (removing an undeclared id fails). |
+| `priority` | Whole-list **replacement** when present; absent means the base list is inherited. The merged list must name exactly the merged tables exactly once. |
+| `merge_targets` | Ordered **union** of base then override values, first occurrence kept; an explicit null resets the allow-list to absent; absent inherits the base list. |
+
+Every id named by an override must resolve against the merged tables. An id
+that is neither declared in the base layer nor introduced by the override
+fails with `E_DECL_INVALID`; the details name the `layer` (`base` or
+`override`), the `scope` and the offending `table`/`tables`. An override-added
+table whose version is not registered subsequently fails with
+`E_REF_NOT_FOUND`, same as a base reference. When an override restates the
+base content exactly for the same scope, `rules_hash` equals the no-override
+compilation; only the provenance fields differ.
+
+Compiler failure codes include `E_DECL_INVALID`, `E_SCOPE_OVERRIDE_INVALID`,
+`E_BAD_POLICY`, `E_REF_NOT_FOUND`, `E_DUP_PRIORITY` and
+`E_MERGE_TARGET_NOT_ALLOWED`.
 
 ## 6. Stored table-version record
 
@@ -176,6 +213,18 @@ Diff object:
 Rules are sorted by `term`. `overridden_by` preserves priority order; each entry
 contains the losing `disposition`, `target`, `source` and a reason. Equal losers
 appear under `supporting_sources`.
+
+A scoped compilation (one built from a `scope_overrides` layer) adds two fields
+and a per-table `layer` marker in `tables`:
+
+- `scope_override`: the merge contract from section 5.1, including the
+  operation (`base`/`add`/`replace`/`remove`) and layer of every table and the
+  `priority`/`merge_targets` semantics actually applied.
+- `rule_origins`: maps each final rule term to `base` or `override`, the layer
+  that owns its winning source table.
+
+Payloads without an applied override omit both fields, so historical
+compilations stay byte-identical and `rules_hash` is unchanged.
 
 ## 8. Snapshot JSON
 

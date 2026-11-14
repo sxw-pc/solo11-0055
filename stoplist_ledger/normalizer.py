@@ -14,7 +14,6 @@ WHITESPACE_POLICIES = ("trim", "collapse")
 MAX_TERM_LENGTH = 256
 _WS = re.compile(r"\s+", flags=re.UNICODE)
 
-
 @dataclass(frozen=True)
 class NormalizationPolicy:
     case: str = "nfkc_lower"
@@ -22,19 +21,11 @@ class NormalizationPolicy:
 
     def __post_init__(self) -> None:
         if self.case not in CASE_POLICIES:
-            fail(
-                "E_BAD_POLICY",
-                "unknown case policy",
-                case=self.case,
-                allowed=list(CASE_POLICIES),
-            )
+            fail("E_BAD_POLICY", "unknown case policy", case=self.case,
+                 allowed=list(CASE_POLICIES))
         if self.whitespace not in WHITESPACE_POLICIES:
-            fail(
-                "E_BAD_POLICY",
-                "unknown whitespace policy",
-                whitespace=self.whitespace,
-                allowed=list(WHITESPACE_POLICIES),
-            )
+            fail("E_BAD_POLICY", "unknown whitespace policy",
+                 whitespace=self.whitespace, allowed=list(WHITESPACE_POLICIES))
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> "NormalizationPolicy":
@@ -75,27 +66,18 @@ class NormalizationPolicy:
         if not normalized:
             fail("E_EMPTY_TERM", "term is empty after normalization", term=term)
         if len(normalized) > MAX_TERM_LENGTH:
-            fail(
-                "E_TERM_TOO_LONG",
-                "normalized term exceeds the length limit",
-                length=len(normalized),
-                limit=MAX_TERM_LENGTH,
-            )
+            fail("E_TERM_TOO_LONG", "normalized term exceeds the length limit",
+                 length=len(normalized), limit=MAX_TERM_LENGTH)
         for char in normalized:
             if unicodedata.category(char) in {"Cc", "Cf"}:
-                fail(
-                    "E_CTRL_CHAR",
-                    "term contains a control or format character",
-                    codepoint=f"U+{ord(char):04X}",
-                )
+                fail("E_CTRL_CHAR",
+                     "term contains a control or format character",
+                     codepoint=f"U+{ord(char):04X}")
         return normalized
 
     def validate_mapping_entry(self, source: str, target: str) -> tuple[str, str]:
-        return (
-            self.normalize_validated(source),
-            self.normalize_validated(target),
-        )
-
+        return (self.normalize_validated(source),
+                self.normalize_validated(target))
 
 def assert_idempotent(policy: NormalizationPolicy, term: str) -> str:
     once = policy.normalize_validated(term)

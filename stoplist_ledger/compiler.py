@@ -10,11 +10,16 @@ import yaml
 from .clock import FixedClock
 from .errors import fail
 from .normalizer import NormalizationPolicy
+from .scope_overrides import (
+    BASE_LAYER,
+    effective_declaration,
+    parse_scope_overrides,
+    parse_table_ref,
+)
 from .store import LedgerStore
 from .util import display_path, read_text, stable_hash
 
 DISPOSITIONS = ("drop", "merge", "whitelist_exempt")
-
 
 def load_declaration(path: Path) -> dict[str, Any]:
     """Load and type-check a declaration without resolving any table."""
@@ -42,24 +47,12 @@ def load_declaration(path: Path) -> dict[str, Any]:
     tables: list[dict[str, Any]] = []
     seen: set[str] = set()
     for index, item in enumerate(raw_tables):
-        if not isinstance(item, Mapping):
-            fail("E_DECL_INVALID", "table reference must be a mapping", index=index)
+        ref = parse_table_ref(item, index, BASE_LAYER)
         table_id = item.get("id")
-        version = item.get("version")
-        scopes = item.get("scopes", ["*"])
-        if not isinstance(table_id, str) or not table_id:
-            fail("E_DECL_INVALID", "table reference id must be a string", index=index)
-        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
-            fail("E_DECL_INVALID", "table version must be a positive integer",
-                 table=table_id)
-        if not isinstance(scopes, list) or not all(isinstance(s, str) for s in scopes):
-            fail("E_DECL_INVALID", "table scopes must be a string list", table=table_id)
         if table_id in seen:
             fail("E_DECL_INVALID", "duplicate table reference", table=table_id)
         seen.add(table_id)
-        tables.append(
-            {"id": table_id, "version": version, "scopes": list(scopes) or ["*"]}
-        )
+        tables.append(ref)
 
     priority = raw.get("priority", [ref["id"] for ref in tables])
     if not isinstance(priority, list) or not all(isinstance(i, str) for i in priority):
@@ -71,6 +64,7 @@ def load_declaration(path: Path) -> dict[str, Any]:
         ):
             fail("E_DECL_INVALID", "merge_targets must be a list of strings")
         merge_targets = list(merge_targets)
+    scope_overrides = parse_scope_overrides(raw.get("scope_overrides"))
     declaration = {
         "name": name.strip(),
         "scope": scope.strip(),
@@ -79,36 +73,26 @@ def load_declaration(path: Path) -> dict[str, Any]:
         "priority": list(priority),
         "merge_targets": merge_targets,
     }
+    if scope_overrides:
+        declaration["scope_overrides"] = scope_overrides
     declaration["declaration_path"] = display_path(path)
     declaration["policy"] = policy
     declaration["declaration_hash"] = stable_hash(declaration | {"policy": None})
     return declaration
-
 
 def table_in_scope(scope: str, scopes: list[str]) -> bool:
     if scope in {"*", "all"}:
         return True
     return any(item in {"*", "all", scope} for item in scopes)
 
-
 def _proposal(source: dict[str, Any], disposition: str,
               target: str | None = None) -> dict[str, Any]:
-    return {
-        "disposition": disposition,
-        "target": target,
-        "source": source | {"rule": f"{source['kind']}:{disposition}"},
-    }
-
+    return {"disposition": disposition, "target": target,
+            "source": source | {"rule": f"{source['kind']}:{disposition}"}}
 
 def _source(table: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "table_id": table["table_id"],
-        "version": table["version"],
-        "kind": table["kind"],
-        "line": entry["line"],
-        "raw": entry["raw"],
-    }
-
+    return {"table_id": table["table_id"], "version": table["version"],
+            "kind": table["kind"], "line": entry["line"], "raw": entry["raw"]}
 
 def build_rules(
     declaration: dict[str, Any],
@@ -118,6 +102,7 @@ def build_rules(
 
     policy: NormalizationPolicy = declaration["policy"]
     scope = declaration["scope"]
+    table_layers = declaration.get("table_layers")
     refs = [ref for ref in declaration["tables"]
             if table_in_scope(scope, ref["scopes"])]
     active_ids = [ref["id"] for ref in refs]
@@ -125,9 +110,11 @@ def build_rules(
         fail("E_DUP_PRIORITY", "priority list contains duplicate table ids",
              priority=declaration["priority"])
     known = {ref["id"] for ref in declaration["tables"]}
-    unknown = [table_id for table_id in declaration["priority"] if table_id not in known]
+    unknown = [table_id for table_id in declaration["priority"]
+               if table_id not in known]
     if unknown:
-        fail("E_DECL_INVALID", "priority references undeclared tables", tables=unknown)
+        fail("E_DECL_INVALID", "priority references undeclared tables",
+             tables=unknown)
     missing_priority = [table_id for table_id in active_ids
                         if table_id not in declaration["priority"]]
     if missing_priority:
@@ -140,16 +127,17 @@ def build_rules(
         if table_id not in active_ids:
             continue
         table = versions[table_id]
-        table_trace.append(
-            {
-                "id": table["table_id"],
-                "version": table["version"],
-                "kind": table["kind"],
-                "scopes": next(r["scopes"] for r in refs if r["id"] == table_id),
-                "content_hash": table["content_hash"],
-                "entry_count": table["entry_count"],
-            }
-        )
+        trace_row = {
+            "id": table["table_id"],
+            "version": table["version"],
+            "kind": table["kind"],
+            "scopes": next(r["scopes"] for r in refs if r["id"] == table_id),
+            "content_hash": table["content_hash"],
+            "entry_count": table["entry_count"],
+        }
+        if table_layers is not None:
+            trace_row["layer"] = table_layers[table_id]
+        table_trace.append(trace_row)
         for entry in table["entries"]:
             term = policy.normalize_validated(entry["raw"])
             source = _source(table, entry)
@@ -167,38 +155,43 @@ def build_rules(
             if (current["disposition"], current["target"]) != (
                 candidate["disposition"], candidate["target"]
             ):
-                current["overridden_by"].append(
-                    {
-                        "disposition": candidate["disposition"],
-                        "target": candidate["target"],
-                        "source": candidate["source"],
-                        "reason": "lower priority than winning proposal",
-                    }
-                )
+                current["overridden_by"].append({
+                    "disposition": candidate["disposition"],
+                    "target": candidate["target"],
+                    "source": candidate["source"],
+                    "reason": "lower priority than winning proposal",
+                })
             else:
-                current.setdefault("supporting_sources", []).append(candidate["source"])
+                current.setdefault("supporting_sources",
+                                   []).append(candidate["source"])
 
     merge_targets = declaration["merge_targets"]
     if merge_targets is not None:
         allowed = {policy.normalize_validated(target) for target in merge_targets}
         for rule in proposals.values():
             if rule["disposition"] == "merge" and rule["target"] not in allowed:
-                fail(
-                    "E_MERGE_TARGET_NOT_ALLOWED",
-                    "merge target is outside declaration allow-list",
-                    term=rule["term"],
-                    target=rule["target"],
-                    allowed=sorted(allowed),
-                )
+                fail("E_MERGE_TARGET_NOT_ALLOWED",
+                     "merge target is outside declaration allow-list",
+                     term=rule["term"], target=rule["target"],
+                     allowed=sorted(allowed))
     rules = sorted(proposals.values(), key=lambda rule: rule["term"])
     counts = {name: 0 for name in DISPOSITIONS}
     for rule in rules:
         counts[rule["disposition"]] += 1
     return rules, counts, table_trace
 
-
-def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, Any]:
+def build_compilation(store: LedgerStore, declaration_path: Path,
+                      scope: str | None = None) -> dict[str, Any]:
     declaration = load_declaration(declaration_path)
+    effective = effective_declaration(declaration, scope) if scope is not None \
+        else None
+    if effective is None and scope is None:
+        return _compile_effective(store, declaration, False)
+    target = effective or {**declaration, "scope": scope}
+    return _compile_effective(store, target, effective is not None)
+
+def _compile_effective(store: LedgerStore, declaration: dict[str, Any],
+                       layered: bool) -> dict[str, Any]:
     scope = declaration["scope"]
     active_refs = [ref for ref in declaration["tables"]
                    if table_in_scope(scope, ref["scopes"])]
@@ -206,28 +199,22 @@ def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, A
     for ref in active_refs:
         version = store.get_version(ref["id"], ref["version"])
         if version is None:
-            fail(
-                "E_REF_NOT_FOUND",
-                "declared table version does not exist",
-                table_id=ref["id"],
-                version=ref["version"],
-            )
+            fail("E_REF_NOT_FOUND", "declared table version does not exist",
+                 table_id=ref["id"], version=ref["version"])
         versions[ref["id"]] = version
     rules, counts, table_trace = build_rules(declaration, versions)
-    rules_hash = stable_hash(
-        {
-            "scope": scope,
-            "normalization": declaration["normalization"],
-            "priority": [t["id"] for t in table_trace],
-            "tables": [
-                {"id": t["id"], "version": t["version"], "kind": t["kind"],
-                 "content_hash": t["content_hash"]}
-                for t in table_trace
-            ],
-            "rules": rules,
-        }
-    )
-    return {
+    rules_hash = stable_hash({
+        "scope": scope,
+        "normalization": declaration["normalization"],
+        "priority": [t["id"] for t in table_trace],
+        "tables": [
+            {"id": t["id"], "version": t["version"], "kind": t["kind"],
+             "content_hash": t["content_hash"]}
+            for t in table_trace
+        ],
+        "rules": rules,
+    })
+    payload = {
         "kind": "compilation",
         "schema_version": 1,
         "name": declaration["name"],
@@ -243,21 +230,27 @@ def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, A
         "disposition_counts": counts,
         "rules_hash": rules_hash,
     }
-
+    if layered:
+        table_layers = declaration["table_layers"]
+        payload["rule_origins"] = {
+            rule["term"]: table_layers[rule["source"]["table_id"]]
+            for rule in rules
+        }
+        payload["scope_override"] = declaration["merge_contract"]
+    return payload
 
 def compile_declaration(
     store: LedgerStore,
     declaration_path: Path,
     clock: FixedClock,
     operator: str = "op-demo-01",
+    scope: str | None = None,
 ) -> dict[str, Any]:
-    payload = build_compilation(store, declaration_path)
+    payload = build_compilation(store, declaration_path, scope)
     saved = store.save_compilation(payload, operator, clock.timestamp())
-    store.add_audit(
-        "compilation.create",
-        f"{payload['name']}:{payload['rules_hash'][:12]}",
-        {"rule_count": payload["rule_count"], "scope": payload["scope"]},
-        operator,
-        clock.timestamp(),
-    )
+    store.add_audit("compilation.create",
+                    f"{payload['name']}:{payload['rules_hash'][:12]}",
+                    {"rule_count": payload["rule_count"],
+                     "scope": payload["scope"]},
+                    operator, clock.timestamp())
     return saved

@@ -16,12 +16,12 @@ ERROR_CODES: dict[str, str] = {
     "E_REF_NOT_FOUND": "A referenced table, version, compilation or snapshot is missing",
     "E_MERGE_TARGET_NOT_ALLOWED": "A merge target is outside the declared allow-list",
     "E_DECL_INVALID": "The declaration is structurally invalid",
+    "E_SCOPE_OVERRIDE_INVALID": "A scope override layer is structurally invalid",
     "E_CONFIRM_REQUIRED": "A destructive reset requires explicit confirmation",
     "E_UNSAFE_RESET": "A reset target is outside the default var directory",
     "E_NOT_LOCAL": "The audit server may bind only to a loopback address",
     "E_IO": "A local file operation failed",
 }
-
 
 class LedgerError(Exception):
     """An expected, user-facing failure with a stable machine code."""
@@ -45,7 +45,6 @@ class LedgerError(Exception):
             "message": self.message,
             "details": self.details,
         }
-
 
 def fail(code: str, message: str, **details: Any) -> None:
     """Raise a LedgerError; kept as a function for compact validation branches."""

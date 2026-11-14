@@ -88,28 +88,36 @@ source offsets.
 
 1. Parse and type-check the declaration. Unknown normalization keys and malformed
    references fail with `E_DECL_INVALID` or `E_BAD_POLICY`.
-2. Determine which referenced tables are active for the declaration scope:
+2. When compiling for an explicit scope with a matching `scope_overrides` layer,
+   merge the layer into the base declaration using the versioned contract in
+   `DATA_CONTRACT.md` (tables add/replace/remove, priority replaces, merge
+   targets union). Unknown override ids fail with `E_DECL_INVALID` naming the
+   layer and id; structural layer failures use `E_SCOPE_OVERRIDE_INVALID`.
+3. Determine which referenced tables are active for the declaration scope:
    a table applies when its scope list contains `*`, `all` or the declaration
    scope.
-3. Load each active table version. Missing versions fail with
+4. Load each active table version. Missing versions fail with
    `E_REF_NOT_FOUND`.
-4. Validate uniqueness/completeness of the priority list.
-5. Iterate tables in high-to-low priority and entries in file order. Each entry
+5. Validate uniqueness/completeness of the priority list.
+6. Iterate tables in high-to-low priority and entries in file order. Each entry
    proposes:
    - `drop` for stoplist/noise;
    - `merge` plus normalized target for synonym;
    - `whitelist_exempt` for whitelist.
-6. The first proposal for a normalized term wins. Later proposals with a
+7. The first proposal for a normalized term wins. Later proposals with a
    different disposition/target enter the winner's `overridden_by` chain; equal
    proposals become `supporting_sources`.
-7. If `merge_targets` is present, every effective merge target must normalize to
+8. If `merge_targets` is present, every effective merge target must normalize to
    an allow-list member, otherwise `E_MERGE_TARGET_NOT_ALLOWED`.
-8. Sort rules by normalized term. Count dispositions. Hash scope, normalization,
+9. Sort rules by normalized term. Count dispositions. Hash scope, normalization,
    active tables (id/version/kind/content hash), priority and rules.
 
 Each entry's `source` names the table id, version, kind, source line, raw form
 and rule label such as `stoplist:drop`. This is enough to reconstruct why a term
-won.
+won. A scoped compilation additionally records the merge contract
+(`scope_override`) and maps every final rule to its owning layer
+(`rule_origins`: `base` or `override`). No-override compilations carry neither
+field, so their bytes and `rules_hash` match the pre-override compiler exactly.
 
 Scopes are labels, not language detection. A caller supplies a scope or uses the
 compiled declaration scope; snapshotting with a mismatched scope is rejected.

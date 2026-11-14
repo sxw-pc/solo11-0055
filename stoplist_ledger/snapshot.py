@@ -20,7 +20,6 @@ DEFAULT_SOURCE = {
     "rule": "default:keep",
 }
 
-
 def tokenize(text: str) -> list[dict[str, Any]]:
     """Split on whitespace and Unicode punctuation while keeping raw offsets."""
 
@@ -40,22 +39,13 @@ def tokenize(text: str) -> list[dict[str, Any]]:
         tokens.append({"raw": text[start:], "start": start, "end": len(text)})
     return tokens
 
-
 def _decision(rule: dict[str, Any] | None, raw: str) -> dict[str, Any]:
     if rule is None:
-        return {
-            "disposition": "keep",
-            "target": None,
-            "source": DEFAULT_SOURCE | {"raw": raw},
-            "overridden_by": [],
-        }
-    return {
-        "disposition": rule["disposition"],
-        "target": rule["target"],
-        "source": rule["source"],
-        "overridden_by": rule.get("overridden_by", []),
-    }
-
+        return {"disposition": "keep", "target": None,
+                "source": DEFAULT_SOURCE | {"raw": raw}, "overridden_by": []}
+    return {"disposition": rule["disposition"], "target": rule["target"],
+            "source": rule["source"],
+            "overridden_by": rule.get("overridden_by", [])}
 
 def build_snapshot(compilation: dict[str, Any], text_path: Path,
                    scope: str | None = None) -> dict[str, Any]:
@@ -79,19 +69,13 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         term = policy.normalize_validated(token["raw"])
         decision = _decision(rules.get(term), token["raw"])
         counts[decision["disposition"]] += 1
-        token_rows.append(
-            {
-                "index": index,
-                "raw": token["raw"],
-                "start": token["start"],
-                "end": token["end"],
-                "term": term,
-                "disposition": decision["disposition"],
-                "target": decision["target"],
-                "source": decision["source"],
-                "overridden_by": decision["overridden_by"],
-            }
-        )
+        token_rows.append({
+            "index": index, "raw": token["raw"],
+            "start": token["start"], "end": token["end"], "term": term,
+            "disposition": decision["disposition"],
+            "target": decision["target"], "source": decision["source"],
+            "overridden_by": decision["overridden_by"],
+        })
     summary = {
         "token_count": len(token_rows),
         **counts,
@@ -114,7 +98,6 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         "summary": summary,
     }
     return semantic | {"result_hash": stable_hash(semantic)}
-
 
 def snapshot_text(
     store: LedgerStore,
@@ -148,7 +131,6 @@ def snapshot_text(
         clock.timestamp(),
     )
     return saved
-
 
 def snapshot_many(
     store: LedgerStore,

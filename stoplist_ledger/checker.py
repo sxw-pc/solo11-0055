@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +26,6 @@ CHECK_NAMES = {
 }
 _WS = re.compile(r"\s+")
 
-
 def _finding(code: str, subject: str, message: str, details: dict[str, Any],
              severity: str = "warning") -> dict[str, Any]:
     return {
@@ -38,16 +37,13 @@ def _finding(code: str, subject: str, message: str, details: dict[str, Any],
         "details": details,
     }
 
-
 def _canonical_variant(term: str) -> str:
     return _WS.sub(" ", unicodedata.normalize("NFKC", term).casefold()).strip()
-
 
 def _cycle_signature(cycle: list[str]) -> tuple[str, ...]:
     pivot = min(range(len(cycle)), key=lambda index: cycle[index])
     rotated = cycle[pivot:] + cycle[:pivot]
     return tuple(rotated)
-
 
 def _find_cycles(graph: dict[str, str]) -> list[list[str]]:
     cycles: set[tuple[str, ...]] = set()
@@ -65,7 +61,6 @@ def _find_cycles(graph: dict[str, str]) -> list[list[str]]:
             current = graph[current]
     return [list(cycle) for cycle in sorted(cycles)]
 
-
 def _active_versions(
     store: LedgerStore, declaration: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -82,19 +77,14 @@ def _active_versions(
             versions.append(version)
     return versions, missing
 
-
 def run_checks(declaration: dict[str, Any],
                versions: list[dict[str, Any]],
                missing: list[dict[str, Any]]) -> list[dict[str, Any]]:
     policy: NormalizationPolicy = declaration["policy"]
     findings: list[dict[str, Any]] = [
-        _finding(
-            "C05",
-            f"{ref['id']}@v{ref['version']}",
-            "declaration references a table version that is not registered",
-            {"table_id": ref["id"], "version": ref["version"]},
-            "error",
-        )
+        _finding("C05", f"{ref['id']}@v{ref['version']}",
+                 "declaration references a table version that is not registered",
+                 {"table_id": ref["id"], "version": ref["version"]}, "error")
         for ref in missing
     ]
 
@@ -103,27 +93,18 @@ def run_checks(declaration: dict[str, Any],
         priority_counts[table_id] += 1
     for table_id in sorted(priority_counts):
         if priority_counts[table_id] > 1:
-            findings.append(
-                _finding(
-                    "C06", table_id,
-                    "priority list contains a duplicate table id",
-                    {"table_id": table_id, "occurrences": priority_counts[table_id]},
-                    "error",
-                )
-            )
+            findings.append(_finding(
+                "C06", table_id, "priority list contains a duplicate table id",
+                {"table_id": table_id,
+                 "occurrences": priority_counts[table_id]}, "error"))
 
     for version in versions:
         if version["entry_count"] == 0:
-            findings.append(
-                _finding(
-                    "C07",
-                    f"{version['table_id']}@v{version['version']}",
-                    "referenced table version has no entries",
-                    {"table_id": version["table_id"],
-                     "version": version["version"]},
-                    "error",
-                )
-            )
+            findings.append(_finding(
+                "C07", f"{version['table_id']}@v{version['version']}",
+                "referenced table version has no entries",
+                {"table_id": version["table_id"],
+                 "version": version["version"]}, "error"))
 
     proposals: dict[str, list[dict[str, Any]]] = defaultdict(list)
     whitelist_terms: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -131,26 +112,27 @@ def run_checks(declaration: dict[str, Any],
     graph: dict[str, str] = {}
     defined = {policy.normalize_validated(target)
                for target in (declaration["merge_targets"] or [])}
+    dispositions = {
+        "synonym": "merge", "stoplist": "drop", "noise": "drop",
+        "whitelist": "whitelist_exempt",
+    }
     for version in versions:
         for entry in version["entries"]:
             term = policy.normalize_validated(entry["raw"])
             defined.add(term)
             source = {"table_id": version["table_id"],
-                      "version": version["version"],
-                      "kind": version["kind"], "line": entry["line"],
-                      "raw": entry["raw"]}
-            if version["kind"] == "synonym":
-                target = policy.normalize_validated(entry["target_raw"])
+                      "version": version["version"], "kind": version["kind"],
+                      "line": entry["line"], "raw": entry["raw"]}
+            kind = version["kind"]
+            target = (policy.normalize_validated(entry["target_raw"])
+                      if kind == "synonym" else None)
+            if kind == "synonym":
                 graph[term] = target
-                proposals[term].append(source | {"disposition": "merge",
-                                                 "target": target})
-            elif version["kind"] in {"stoplist", "noise"}:
-                proposals[term].append(source | {"disposition": "drop",
-                                                 "target": None})
+            proposals[term].append(
+                source | {"disposition": dispositions[kind], "target": target})
+            if kind in {"stoplist", "noise"}:
                 drop_terms[term].append(source)
-            elif version["kind"] == "whitelist":
-                proposals[term].append(source | {"disposition": "whitelist_exempt",
-                                                 "target": None})
+            elif kind == "whitelist":
                 whitelist_terms[term].append(source)
 
     for term in sorted(proposals):
@@ -159,38 +141,26 @@ def run_checks(declaration: dict[str, Any],
         signatures = {(item["disposition"], item["target"])
                       for item in conflicts}
         if len(signatures) > 1:
-            findings.append(
-                _finding(
-                    "C01", term,
-                    "the same term is disposed differently by multiple tables",
-                    {"term": term, "proposals": sorted(
-                        conflicts,
-                        key=lambda item: (item["table_id"], item["version"],
-                                          item["line"]),
-                    )},
-                )
-            )
+            findings.append(_finding(
+                "C01", term,
+                "the same term is disposed differently by multiple tables",
+                {"term": term, "proposals": sorted(
+                    conflicts, key=lambda item: (item["table_id"],
+                                                 item["version"], item["line"]))}
+            ))
 
     for cycle in _find_cycles(graph):
-        findings.append(
-            _finding(
-                "C02", " -> ".join(cycle + [cycle[0]]),
-                "synonym mapping contains a directed cycle",
-                {"cycle": cycle + [cycle[0]]},
-                "error",
-            )
-        )
+        findings.append(_finding(
+            "C02", " -> ".join(cycle + [cycle[0]]),
+            "synonym mapping contains a directed cycle",
+            {"cycle": cycle + [cycle[0]]}, "error"))
 
     for term, target in sorted(graph.items()):
         if target not in defined:
-            findings.append(
-                _finding(
-                    "C03", target,
-                    "synonym target is absent from all referenced tables and allow-lists",
-                    {"term": term, "target": target},
-                    "error",
-                )
-            )
+            findings.append(_finding(
+                "C03", target,
+                "synonym target is absent from all referenced tables and allow-lists",
+                {"term": term, "target": target}, "error"))
 
     groups: dict[str, set[str]] = defaultdict(set)
     group_sources: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -200,30 +170,23 @@ def run_checks(declaration: dict[str, Any],
             groups[key].add(policy.normalize_validated(entry["raw"]))
             group_sources[key].append(
                 {"table_id": version["table_id"], "version": version["version"],
-                 "raw": entry["raw"]}
-            )
+                 "raw": entry["raw"]})
     for key in sorted(groups):
         if len(groups[key]) > 1:
-            findings.append(
-                _finding(
-                    "C04", key,
-                    "case variants normalize to distinct terms under the declaration",
-                    {"variants": sorted(groups[key]),
-                     "sources": sorted(group_sources[key],
-                                       key=lambda item: (item["table_id"],
-                                                         item["raw"]))},
-                )
-            )
+            findings.append(_finding(
+                "C04", key,
+                "case variants normalize to distinct terms under the declaration",
+                {"variants": sorted(groups[key]),
+                 "sources": sorted(group_sources[key],
+                                   key=lambda item: (item["table_id"],
+                                                     item["raw"]))}))
 
     for term in sorted(set(whitelist_terms) & set(drop_terms)):
-        findings.append(
-            _finding(
-                "C08", term,
-                "a whitelist term is also covered by a stop or noise table",
-                {"term": term, "whitelist": whitelist_terms[term],
-                 "drop_tables": drop_terms[term]},
-            )
-        )
+        findings.append(_finding(
+            "C08", term,
+            "a whitelist term is also covered by a stop or noise table",
+            {"term": term, "whitelist": whitelist_terms[term],
+             "drop_tables": drop_terms[term]}))
 
     unique = {canonical_json(finding): finding for finding in findings}
     return sorted(
@@ -231,7 +194,6 @@ def run_checks(declaration: dict[str, Any],
         key=lambda finding: (finding["code"], finding["subject"],
                              canonical_json(finding["details"])),
     )
-
 
 def check_declaration(
     store: LedgerStore,
@@ -242,9 +204,7 @@ def check_declaration(
     declaration = load_declaration(declaration_path)
     versions, missing = _active_versions(store, declaration)
     findings = run_checks(declaration, versions, missing)
-    by_code: dict[str, int] = {}
-    for finding in findings:
-        by_code[finding["code"]] = by_code.get(finding["code"], 0) + 1
+    by_code = dict(sorted(Counter(f["code"] for f in findings).items()))
     payload: dict[str, Any] = {
         "kind": "check",
         "schema_version": 1,

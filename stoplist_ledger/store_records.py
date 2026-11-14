@@ -8,7 +8,6 @@ from typing import Any
 
 from .util import canonical_json
 
-
 class RecordMixin:
     """Methods that assume the host class provides _connect and _decode."""
 
@@ -17,6 +16,21 @@ class RecordMixin:
 
     def _decode(self, row: sqlite3.Row, *fields: str) -> dict[str, Any]:
         raise NotImplementedError
+
+    def _fetch_one(self, table: str, row_id: int, loader):
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT * FROM {table} WHERE id = ?", (row_id,)
+            ).fetchone()
+        return loader(row) if row else None
+
+    def _fetch_all(self, table: str, loader, where: str = "",
+                   args: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+        sql = f"SELECT * FROM {table}" + (f" WHERE {where}" if where else "")
+        sql += " ORDER BY id"
+        with self._connect() as conn:
+            rows = conn.execute(sql, args).fetchall()
+        return [loader(row) for row in rows]
 
     # ---- snapshots ------------------------------------------------------
     def save_snapshot(self, payload: dict[str, Any], operator: str,
@@ -51,22 +65,14 @@ class RecordMixin:
         return stored
 
     def get_snapshot(self, snapshot_id: int) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM snapshots WHERE id = ?", (snapshot_id,)
-            ).fetchone()
-        return self._snapshot(row) if row else None
+        return self._fetch_one("snapshots", snapshot_id, self._snapshot)
 
     def list_snapshots(self, compilation_id: int | None = None) -> list[dict[str, Any]]:
-        sql = "SELECT * FROM snapshots"
-        args: tuple[Any, ...] = ()
-        if compilation_id is not None:
-            sql += " WHERE compilation_id = ?"
-            args = (compilation_id,)
-        sql += " ORDER BY id"
-        with self._connect() as conn:
-            rows = conn.execute(sql, args).fetchall()
-        return [self._snapshot(row) for row in rows]
+        if compilation_id is None:
+            return self._fetch_all("snapshots", self._snapshot)
+        return self._fetch_all(
+            "snapshots", self._snapshot, "compilation_id = ?", (compilation_id,)
+        )
 
     # ---- checks ---------------------------------------------------------
     def save_check(self, declaration_path: str, declaration_hash: str,
@@ -97,16 +103,10 @@ class RecordMixin:
         return payload
 
     def get_check(self, check_id: int) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM checks WHERE id = ?", (check_id,)
-            ).fetchone()
-        return self._check(row) if row else None
+        return self._fetch_one("checks", check_id, self._check)
 
     def list_checks(self) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM checks ORDER BY id").fetchall()
-        return [self._check(row) for row in rows]
+        return self._fetch_all("checks", self._check)
 
     # ---- impacts --------------------------------------------------------
     def save_impact(self, left_refs: list[int], right_refs: list[int],
@@ -138,13 +138,7 @@ class RecordMixin:
         return payload
 
     def get_impact(self, impact_id: int) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM impacts WHERE id = ?", (impact_id,)
-            ).fetchone()
-        return self._impact(row) if row else None
+        return self._fetch_one("impacts", impact_id, self._impact)
 
     def list_impacts(self) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM impacts ORDER BY id").fetchall()
-        return [self._impact(row) for row in rows]
+        return self._fetch_all("impacts", self._impact)

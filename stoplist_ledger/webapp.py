@@ -11,14 +11,12 @@ from .util import pretty_json
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
-
 def validate_bind_host(host: str) -> str:
     from .errors import fail
 
     if host not in LOOPBACK_HOSTS:
         fail("E_NOT_LOCAL", "serve may bind only to a loopback host", host=host)
     return host
-
 
 def create_app(store: LedgerStore) -> Flask:
     app = Flask(__name__)
@@ -39,11 +37,9 @@ def create_app(store: LedgerStore) -> Flask:
 
     @app.get("/")
     def index() -> str:
-        tables = store.list_tables()
-        compilations = store.list_compilations()
-        snapshots = store.list_snapshots()
-        checks = store.list_checks()
-        impacts = store.list_impacts()
+        tables, compilations = store.list_tables(), store.list_compilations()
+        snapshots, checks, impacts = (store.list_snapshots(),
+                                      store.list_checks(), store.list_impacts())
         facts = {
             "table versions": store.summary()["table_versions"],
             "compilations": len(compilations),
@@ -52,11 +48,14 @@ def create_app(store: LedgerStore) -> Flask:
             "impact reports": len(impacts),
         }
         links = [
-            {"href": url_for("tables"), "label": "Browse table versions"},
-            {"href": url_for("compilations"), "label": "Browse compilations"},
-            {"href": url_for("snapshots"), "label": "Browse snapshots"},
-            {"href": url_for("checks"), "label": "Browse check reports"},
-            {"href": url_for("impacts"), "label": "Browse impact reports"},
+            {"href": url_for(endpoint), "label": label}
+            for endpoint, label in (
+                ("tables", "Browse table versions"),
+                ("compilations", "Browse compilations"),
+                ("snapshots", "Browse snapshots"),
+                ("checks", "Browse check reports"),
+                ("impacts", "Browse impact reports"),
+            )
         ]
         payload = {
             "tables": tables,
@@ -77,129 +76,119 @@ def create_app(store: LedgerStore) -> Flask:
         }
         return page("Local audit overview", facts, links, payload)
 
-    @app.get("/tables")
-    def tables() -> str:
-        records = store.list_versions()
-        links = [
+    def _list_route(path: str, title: str, endpoint: str,
+                    list_call, link_call):
+        @app.get(path, endpoint=endpoint)
+        def route() -> str:
+            records = list_call()
+            return page(title, {"count": len(records)}, link_call(records),
+                        records)
+
+    def _detail_route(path: str, title: str, endpoint: str, get_call,
+                      facts_call):
+        @app.get(path, endpoint=endpoint)
+        def route(record_id: int) -> str:
+            record = get_call(record_id)
+            if record is None:
+                abort(404)
+            return page(f"{title} {record_id}", facts_call(record),
+                        payload=record)
+
+    _list_route(
+        "/tables", "Table versions", "tables", store.list_versions,
+        lambda records: [
             {"href": url_for("table_detail", table_id=table["table_id"]),
              "label": table["table_id"]}
             for table in store.list_tables()
-        ]
-        return page("Table versions", {"versions": len(records)}, links, records)
+        ],
+    )
 
     @app.get("/tables/<table_id>")
     def table_detail(table_id: str) -> str:
         records = store.list_versions(table_id)
         if not records:
             abort(404)
-        facts = {
-            "table": table_id,
-            "versions": len(records),
-            "latest": records[-1]["version"],
-        }
+        facts = {"table": table_id, "versions": len(records),
+                 "latest": records[-1]["version"]}
         return page(f"Table {table_id}", facts, payload=records)
 
-    @app.get("/compilations")
-    def compilations() -> str:
-        records = store.list_compilations()
-        links = [
-            {"href": url_for("compilation_detail", compilation_id=item["id"]),
-             "label": f"{item['name']} #{item['id']}"}
-            for item in records
-        ]
-        return page("Compilations", {"count": len(records)}, links, records)
-
-    @app.get("/compilations/<int:compilation_id>")
-    def compilation_detail(compilation_id: int) -> str:
-        record = store.get_compilation(compilation_id)
-        if record is None:
-            abort(404)
-        facts = {
+    _list_route(
+        "/compilations", "Compilations", "compilations",
+        store.list_compilations,
+        lambda records: [
+            {"href": url_for("compilation_detail", record_id=item["id"]),
+             "label": f"{item['name']} #{item['id']}"} for item in records
+        ],
+    )
+    _detail_route(
+        "/compilations/<int:record_id>", "Compilation", "compilation_detail",
+        store.get_compilation,
+        lambda record: {
             "name": record["name"], "scope": record["scope"],
             "rules": record["rule_count"], "rules hash": record["rules_hash"],
-        }
-        return page(f"Compilation {record['name']}", facts, payload=record)
-
-    @app.get("/snapshots")
-    def snapshots() -> str:
-        records = store.list_snapshots()
-        links = [
-            {"href": url_for("snapshot_detail", snapshot_id=item["id"]),
+        },
+    )
+    _list_route(
+        "/snapshots", "Snapshots", "snapshots", store.list_snapshots,
+        lambda records: [
+            {"href": url_for("snapshot_detail", record_id=item["id"]),
              "label": f"{item['text_id']} / {item['compilation']['name']} "
                       f"#{item['id']}"}
             for item in records
-        ]
-        return page("Snapshots", {"count": len(records)}, links, records)
-
-    @app.get("/snapshots/<int:snapshot_id>")
-    def snapshot_detail(snapshot_id: int) -> str:
-        record = store.get_snapshot(snapshot_id)
-        if record is None:
-            abort(404)
-        facts = {
+        ],
+    )
+    _detail_route(
+        "/snapshots/<int:record_id>", "Snapshot", "snapshot_detail",
+        store.get_snapshot,
+        lambda record: {
             "text": record["text_id"],
             "compilation": record["compilation"]["name"],
             "tokens": record["summary"]["token_count"],
             "affected": record["summary"]["affected"],
             "result hash": record["result_hash"],
-        }
-        return page(f"Snapshot {record['text_id']}", facts, payload=record)
-
-    @app.get("/checks")
-    def checks() -> str:
-        records = store.list_checks()
-        links = [
-            {"href": url_for("check_detail", check_id=item["id"]),
+        },
+    )
+    _list_route(
+        "/checks", "Consistency checks", "checks", store.list_checks,
+        lambda records: [
+            {"href": url_for("check_detail", record_id=item["id"]),
              "label": f"{item['declaration_path']} #{item['id']}"}
             for item in records
-        ]
-        return page("Consistency checks", {"count": len(records)}, links, records)
-
-    @app.get("/checks/<int:check_id>")
-    def check_detail(check_id: int) -> str:
-        record = store.get_check(check_id)
-        if record is None:
-            abort(404)
-        facts = {
+        ],
+    )
+    _detail_route(
+        "/checks/<int:record_id>", "Check report", "check_detail",
+        store.get_check,
+        lambda record: {
             "status": record["status"],
             "issues": record["summary"]["total_issues"],
             "by code": record["summary"]["by_code"],
             "report hash": record["report_hash"],
-        }
-        return page("Check report", facts, payload=record)
-
-    @app.get("/impacts")
-    def impacts() -> str:
-        records = store.list_impacts()
-        links = [
-            {"href": url_for("impact_detail", impact_id=item["id"]),
-             "label": f"impact #{item['id']}"}
-            for item in records
-        ]
-        return page("Impact reports", {"count": len(records)}, links, records)
-
-    @app.get("/impacts/<int:impact_id>")
-    def impact_detail(impact_id: int) -> str:
-        record = store.get_impact(impact_id)
-        if record is None:
-            abort(404)
-        facts = {
+        },
+    )
+    _list_route(
+        "/impacts", "Impact reports", "impacts", store.list_impacts,
+        lambda records: [
+            {"href": url_for("impact_detail", record_id=item["id"]),
+             "label": f"impact #{item['id']}"} for item in records
+        ],
+    )
+    _detail_route(
+        "/impacts/<int:record_id>", "Impact report", "impact_detail",
+        store.get_impact,
+        lambda record: {
             "left": record["left"]["compilation"]["name"],
             "right": record["right"]["compilation"]["name"],
             "affected texts": record["summary"]["affected_texts"],
             "affected tokens": record["summary"]["affected_tokens"],
             "report hash": record["report_hash"],
-        }
-        return page("Impact report", facts, payload=record)
+        },
+    )
 
     # ---- JSON API -------------------------------------------------------
     @app.get("/api/summary")
     def api_summary():
         return jsonify(store.summary())
-
-    @app.get("/api/tables")
-    def api_tables():
-        return jsonify(store.list_versions())
 
     @app.get("/api/tables/<table_id>")
     def api_table(table_id: str):
@@ -208,48 +197,29 @@ def create_app(store: LedgerStore) -> Flask:
             abort(404)
         return jsonify(records)
 
-    @app.get("/api/compilations")
-    def api_compilations():
-        return jsonify(store.list_compilations())
-
-    @app.get("/api/compilations/<int:compilation_id>")
-    def api_compilation(compilation_id: int):
-        record = store.get_compilation(compilation_id)
-        if record is None:
-            abort(404)
-        return jsonify(record)
-
-    @app.get("/api/snapshots")
-    def api_snapshots():
-        return jsonify(store.list_snapshots())
-
-    @app.get("/api/snapshots/<int:snapshot_id>")
-    def api_snapshot(snapshot_id: int):
-        record = store.get_snapshot(snapshot_id)
-        if record is None:
-            abort(404)
-        return jsonify(record)
-
-    @app.get("/api/checks")
-    def api_checks():
-        return jsonify(store.list_checks())
-
-    @app.get("/api/checks/<int:check_id>")
-    def api_check(check_id: int):
-        record = store.get_check(check_id)
-        if record is None:
-            abort(404)
-        return jsonify(record)
-
-    @app.get("/api/impacts")
-    def api_impacts():
-        return jsonify(store.list_impacts())
-
-    @app.get("/api/impacts/<int:impact_id>")
-    def api_impact(impact_id: int):
-        record = store.get_impact(impact_id)
-        if record is None:
-            abort(404)
-        return jsonify(record)
+    api_routes = (
+        ("/api/tables", "api_tables", store.list_versions),
+        ("/api/compilations", "api_compilations", store.list_compilations),
+        ("/api/compilations/<int:record_id>", "api_compilation",
+         store.get_compilation),
+        ("/api/snapshots", "api_snapshots", store.list_snapshots),
+        ("/api/snapshots/<int:record_id>", "api_snapshot",
+         store.get_snapshot),
+        ("/api/checks", "api_checks", store.list_checks),
+        ("/api/checks/<int:record_id>", "api_check", store.get_check),
+        ("/api/impacts", "api_impacts", store.list_impacts),
+        ("/api/impacts/<int:record_id>", "api_impact", store.get_impact),
+    )
+    for path, endpoint, call in api_routes:
+        def make_view(call):
+            def view(record_id: int | None = None):
+                if record_id is None:
+                    return jsonify(call())
+                record = call(record_id)
+                if record is None:
+                    abort(404)
+                return jsonify(record)
+            return view
+        app.add_url_rule(path, endpoint, make_view(call))
 
     return app

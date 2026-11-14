@@ -21,7 +21,6 @@ from .util import pretty_json
 
 DEFAULT_VAR = Path("var")
 
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m stoplist_ledger",
@@ -47,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     compile_cmd = commands.add_parser("compile", help="compile a declaration")
     compile_cmd.add_argument("declaration", type=Path)
+    compile_cmd.add_argument("--scope", default=None,
+                             help="scope whose scope_overrides layer is merged")
     _report_args(compile_cmd)
 
     snapshot_cmd = commands.add_parser("snapshot", help="snapshot one text")
@@ -87,11 +88,9 @@ def build_parser() -> argparse.ArgumentParser:
     reset.add_argument("--path", type=Path)
     return parser
 
-
 def _report_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--format", choices=["json", "md"], default="json")
     parser.add_argument("--out", type=Path)
-
 
 def _context(args: argparse.Namespace) -> tuple[LedgerStore, FixedClock, Path]:
     clock = make_clock(args.now)
@@ -99,6 +98,9 @@ def _context(args: argparse.Namespace) -> tuple[LedgerStore, FixedClock, Path]:
     store = LedgerStore(var_dir / "ledger.db").initialize()
     return store, clock, var_dir
 
+def _emit_json(payload: Any) -> int:
+    print(pretty_json(payload), end="")
+    return 0
 
 def _emit_report(record: dict[str, Any], args: argparse.Namespace,
                  identifier: str, var_dir: Path) -> Path:
@@ -107,7 +109,6 @@ def _emit_report(record: dict[str, Any], args: argparse.Namespace,
     )
     write_report(record, args.format, out)
     return out
-
 
 def _resolve_compilation(store: LedgerStore, value: str) -> dict[str, Any]:
     record = None
@@ -118,7 +119,6 @@ def _resolve_compilation(store: LedgerStore, value: str) -> dict[str, Any]:
     if record is None:
         fail("E_REF_NOT_FOUND", "compilation does not exist", compilation=value)
     return record
-
 
 def _snapshot_ids(store: LedgerStore, explicit: list[int] | None,
                   compilation_id: int | None) -> list[int]:
@@ -132,7 +132,6 @@ def _snapshot_ids(store: LedgerStore, explicit: list[int] | None,
              compilation_id=compilation_id)
     return [record["id"] for record in records]
 
-
 def dispatch(args: argparse.Namespace) -> int:
     if args.command == "reset":
         target = args.path or DEFAULT_VAR.resolve()
@@ -144,8 +143,7 @@ def dispatch(args: argparse.Namespace) -> int:
 
     store, clock, var_dir = _context(args)
     if args.command == "init":
-        print(pretty_json(store.summary()), end="")
-        return 0
+        return _emit_json(store.summary())
     if args.command == "register":
         if len(args.paths) > 1 and (args.table_id or args.version):
             fail("E_BAD_FORMAT", "--table-id/--version require a single file")
@@ -155,29 +153,31 @@ def dispatch(args: argparse.Namespace) -> int:
                           version=args.version)
             for path in args.paths
         ]
-        print(pretty_json([
+        return _emit_json([
             {"id": item["id"], "table_id": item["table_id"],
              "version": item["version"], "kind": item["kind"],
              "content_hash": item["content_hash"]}
             for item in saved
-        ]), end="")
-        return 0
+        ])
     if args.command == "compile":
-        record = compile_declaration(store, args.declaration, clock, args.operator)
-        path = _emit_report(record, args, record["name"], var_dir)
-        print(pretty_json({"id": record["id"], "name": record["name"],
+        record = compile_declaration(store, args.declaration, clock,
+                                     args.operator, scope=args.scope)
+        identifier = record["name"] if not args.scope \
+            else f"{record['name']}_{args.scope}"
+        path = _emit_report(record, args, identifier, var_dir)
+        return _emit_json({"id": record["id"], "name": record["name"],
+                           "scope": record["scope"],
                            "rules_hash": record["rules_hash"],
-                           "report": str(path)}), end="")
-        return 0
+                           "report": str(path)})
     if args.command == "snapshot":
         compilation = _resolve_compilation(store, args.compilation)
         record = snapshot_text(store, compilation["id"], args.text, clock,
                                args.operator, args.scope)
         identifier = f"{compilation['name']}_{record['text_id']}"
         path = _emit_report(record, args, identifier, var_dir)
-        print(pretty_json({"id": record["id"], "result_hash":
-                           record["result_hash"], "report": str(path)}), end="")
-        return 0
+        return _emit_json({"id": record["id"],
+                           "result_hash": record["result_hash"],
+                           "report": str(path)})
     if args.command == "snapshot-all":
         compilation = _resolve_compilation(store, args.compilation)
         texts = sorted(Path(args.texts_dir).glob("*.txt"))
@@ -196,15 +196,13 @@ def dispatch(args: argparse.Namespace) -> int:
             outputs.append({"id": record["id"], "text_id": record["text_id"],
                             "result_hash": record["result_hash"],
                             "report": str(path)})
-        print(pretty_json(outputs), end="")
-        return 0
+        return _emit_json(outputs)
     if args.command == "check":
         record = check_declaration(store, args.declaration, clock, args.operator)
         path = _emit_report(record, args, args.declaration.stem, var_dir)
-        print(pretty_json({"id": record["id"], "status": record["status"],
+        return _emit_json({"id": record["id"], "status": record["status"],
                            "total_issues": record["summary"]["total_issues"],
-                           "report": str(path)}), end="")
-        return 0
+                           "report": str(path)})
     if args.command == "diff":
         left = _snapshot_ids(store, args.left, args.left_compilation)
         right = _snapshot_ids(store, args.right, args.right_compilation)
@@ -212,10 +210,9 @@ def dispatch(args: argparse.Namespace) -> int:
         identifier = (f"{record['left']['compilation']['name']}_to_"
                       f"{record['right']['compilation']['name']}")
         path = _emit_report(record, args, identifier, var_dir)
-        print(pretty_json({"id": record["id"], "summary": record["summary"],
+        return _emit_json({"id": record["id"], "summary": record["summary"],
                            "report_hash": record["report_hash"],
-                           "report": str(path)}), end="")
-        return 0
+                           "report": str(path)})
     if args.command == "report":
         getter = {
             "compilation": store.get_compilation,
@@ -239,7 +236,6 @@ def dispatch(args: argparse.Namespace) -> int:
         return 0
     fail("E_BAD_FORMAT", "unknown command", command=args.command)
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -250,7 +246,6 @@ def main(argv: list[str] | None = None) -> int:
         if exc.details:
             print(pretty_json(exc.details), end="", file=sys.stderr)
         return 2
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

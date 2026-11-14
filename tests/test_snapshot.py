@@ -13,7 +13,6 @@ from stoplist_ledger.snapshot import (
     tokenize,
 )
 
-
 def test_tokenize_offsets_and_punctuation() -> None:
     tokens = tokenize(" Alpha,beta\n gamma!")
     assert tokens == [
@@ -21,7 +20,6 @@ def test_tokenize_offsets_and_punctuation() -> None:
         {"raw": "beta", "start": 7, "end": 11},
         {"raw": "gamma", "start": 13, "end": 18},
     ]
-
 
 def test_snapshot_trace_and_golden(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)
@@ -43,14 +41,12 @@ def test_snapshot_trace_and_golden(populated, clock) -> None:
     }
     tokens = record["tokens"]
     assert tokens[0]["raw"] == "Alpha"
-    assert (tokens[0]["start"], tokens[0]["end"]) == (0, 5)
-    assert tokens[0]["term"] == "alpha"
-    assert tokens[0]["disposition"] == "drop"
+    assert (tokens[0]["start"], tokens[0]["end"],
+            tokens[0]["term"], tokens[0]["disposition"]) == (0, 5, "alpha", "drop")
     assert tokens[0]["source"]["table_id"] == "zh_stop"
     assert tokens[2]["source"]["rule"] == "default:keep"
     assert tokens[3]["target"] == "color"
     assert tokens[6]["disposition"] == "whitelist_exempt"
-
 
 def test_snapshot_hash_is_stable(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)
@@ -63,19 +59,16 @@ def test_snapshot_hash_is_stable(populated, clock) -> None:
     assert saved_a["id"] == saved_b["id"]
     assert len(populated.list_snapshots(compilation["id"])) == 1
 
-
 def test_snapshot_scope_must_match(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)
     with pytest.raises(LedgerError) as caught:
         build_snapshot(compilation, TEXTS[0], scope="lang-zh")
     assert caught.value.code == "E_BAD_FORMAT"
 
-
 def test_snapshot_missing_compilation(store, clock) -> None:
     with pytest.raises(LedgerError) as caught:
         snapshot_text(store, 999, TEXTS[0], clock)
     assert caught.value.code == "E_REF_NOT_FOUND"
-
 
 def test_empty_text_snapshot(populated, clock, tmp_path: Path) -> None:
     compilation = compile_fixture(populated, clock)
@@ -86,7 +79,6 @@ def test_empty_text_snapshot(populated, clock, tmp_path: Path) -> None:
     assert record["summary"]["token_count"] == 0
     assert record["summary"]["keep"] == 0
 
-
 def test_all_fixture_texts_are_traceable(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)
     for text in TEXTS:
@@ -96,24 +88,20 @@ def test_all_fixture_texts_are_traceable(populated, clock) -> None:
         assert all({"index", "start", "end", "disposition", "source"}
                    <= set(token) for token in record["tokens"])
 
-
 def test_tokenize_unicode_and_symbols() -> None:
-    tokens = tokenize("中文，符号！ abc_123 x+y")
+    text = "中文，符号！ abc_123 x+y"
+    tokens = tokenize(text)
     assert [token["raw"] for token in tokens] == ["中文", "符号", "abc_123", "x+y"]
-    assert tokens[0]["start"] == 0
-    assert tokens[-1]["end"] == len("中文，符号！ abc_123 x+y")
-
+    assert (tokens[0]["start"], tokens[-1]["end"]) == (0, len(text))
 
 def test_keep_token_has_default_source(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)
     record = snapshot_text(populated, compilation["id"], TEXTS[0], clock)
     gamma = next(token for token in record["tokens"] if token["term"] == "gamma")
     assert gamma["disposition"] == "keep"
-    assert gamma["source"]["kind"] == "default"
-    assert gamma["source"]["table_id"] is None
-    assert gamma["source"]["rule"] == "default:keep"
-    assert gamma["overridden_by"] == []
-
+    assert (gamma["source"]["kind"], gamma["source"]["table_id"],
+            gamma["source"]["rule"], gamma["overridden_by"]) == (
+        "default", None, "default:keep", [])
 
 def test_snapshot_includes_override_chain(tmp_path, populated) -> None:
     import yaml
@@ -142,7 +130,6 @@ def test_snapshot_includes_override_chain(tmp_path, populated) -> None:
     assert len(token["overridden_by"]) == 1
     assert token["overridden_by"][0]["disposition"] == "merge"
 
-
 def test_snapshot_stores_text_hash_and_source(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)
     record = snapshot_text(populated, compilation["id"], TEXTS[1], clock)
@@ -151,20 +138,17 @@ def test_snapshot_stores_text_hash_and_source(populated, clock) -> None:
     assert record["compilation"]["name"] == "pipeline-a"
     assert record["schema_version"] == 1
 
-
 def test_snapshot_missing_text(populated, clock, tmp_path) -> None:
     compilation = compile_fixture(populated, clock)
     with pytest.raises(LedgerError) as caught:
         snapshot_text(populated, compilation["id"], tmp_path / "no.txt", clock)
     assert caught.value.code == "E_IO"
 
-
 def test_snapshot_audit_event(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)
     snapshot_text(populated, compilation["id"], TEXTS[0], clock)
     events = [event["event"] for event in populated.list_audit()]
     assert "snapshot.create" in events
-
 
 def test_snapshot_many_sorts_by_filename(populated, clock) -> None:
     from conftest import snapshot_set
@@ -178,7 +162,6 @@ def test_snapshot_many_sorts_by_filename(populated, clock) -> None:
         record["id"] for record in records
     )
 
-
 def test_each_disposition_appears_in_fixture_snapshots(populated, clock) -> None:
     from conftest import snapshot_set
 
@@ -187,7 +170,6 @@ def test_each_disposition_appears_in_fixture_snapshots(populated, clock) -> None
     for record in snapshot_set(populated, clock, compilation):
         dispositions.update(token["disposition"] for token in record["tokens"])
     assert dispositions == {"keep", "drop", "merge", "whitelist_exempt"}
-
 
 def test_token_offsets_cover_every_raw_token(populated, clock) -> None:
     compilation = compile_fixture(populated, clock)

@@ -11,12 +11,10 @@ from .util import stable_hash
 
 KEEP = {"disposition": "keep", "target": None}
 
-
 def _outcome(rule: dict[str, Any] | None) -> dict[str, Any]:
     if rule is None:
         return dict(KEEP)
     return {"disposition": rule["disposition"], "target": rule["target"]}
-
 
 def compare_rule_sets(
     left_rules: list[dict[str, Any]],
@@ -35,14 +33,15 @@ def compare_rule_sets(
             new_dropped.append({"term": term, "before": before, "after": after})
         if before["disposition"] == "drop" and after["disposition"] != "drop":
             gone_dropped.append({"term": term, "before": before, "after": after})
-        if (
-            before["disposition"] == "merge" or after["disposition"] == "merge"
-        ) and before["target"] != after["target"]:
+        if (before["disposition"] == "merge"
+                or after["disposition"] == "merge") \
+                and before["target"] != after["target"]:
             merge_changes.append({"term": term, "before": before, "after": after})
-        if (
-            before["disposition"] == "whitelist_exempt"
-        ) != (after["disposition"] == "whitelist_exempt"):
-            exemption_changes.append({"term": term, "before": before, "after": after})
+        if (before["disposition"] == "whitelist_exempt") != (
+            after["disposition"] == "whitelist_exempt"
+        ):
+            exemption_changes.append({"term": term, "before": before,
+                                      "after": after})
     return {
         "new_dropped": new_dropped,
         "gone_dropped": gone_dropped,
@@ -50,10 +49,8 @@ def compare_rule_sets(
         "exemption_changes": exemption_changes,
     }
 
-
 def _token_outcome(token: dict[str, Any]) -> dict[str, Any]:
     return {"disposition": token["disposition"], "target": token["target"]}
-
 
 def compare_texts(
     left: dict[str, Any], right: dict[str, Any]
@@ -62,29 +59,22 @@ def compare_texts(
     right_tokens = right["tokens"]
     changes: list[dict[str, Any]] = []
     for index in range(max(len(left_tokens), len(right_tokens))):
-        before = _token_outcome(left_tokens[index]) if index < len(left_tokens) else None
-        after = _token_outcome(right_tokens[index]) if index < len(right_tokens) else None
+        before = _token_outcome(left_tokens[index]) if index < len(left_tokens) \
+            else None
+        after = _token_outcome(right_tokens[index]) if index < len(right_tokens) \
+            else None
         if before != after:
-            token = right_tokens[index] if index < len(right_tokens) else left_tokens[index]
-            changes.append(
-                {
-                    "index": index,
-                    "raw": token["raw"],
-                    "term": token["term"],
-                    "before": before,
-                    "after": after,
-                }
-            )
+            token = (right_tokens[index] if index < len(right_tokens)
+                     else left_tokens[index])
+            changes.append({"index": index, "raw": token["raw"],
+                            "term": token["term"],
+                            "before": before, "after": after})
     if left.get("text_hash") != right.get("text_hash"):
         changes = [
-            {
-                "index": token["index"],
-                "raw": token["raw"],
-                "term": token["term"],
-                "before": _token_outcome(left["tokens"][token["index"]])
-                if token["index"] < len(left["tokens"]) else None,
-                "after": _token_outcome(token),
-            }
+            {"index": token["index"], "raw": token["raw"], "term": token["term"],
+             "before": _token_outcome(left["tokens"][token["index"]])
+             if token["index"] < len(left["tokens"]) else None,
+             "after": _token_outcome(token)}
             for token in right["tokens"]
         ]
     return {
@@ -96,13 +86,11 @@ def compare_texts(
         "changes": changes,
     }
 
-
 def _snapshot_map(records: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     mapping: dict[str, dict[str, Any]] = {}
     for record in sorted(records, key=lambda item: (item["text_id"], item["id"])):
         mapping.setdefault(record["text_id"], record)
     return mapping
-
 
 def _side(store: LedgerStore, snapshot_ids: list[int]) -> tuple[
     dict[str, Any], list[dict[str, Any]]
@@ -125,7 +113,6 @@ def _side(store: LedgerStore, snapshot_ids: list[int]) -> tuple[
         fail("E_REF_NOT_FOUND", "snapshot compilation is missing",
              compilation_id=compilation_id)
     return compilation, records
-
 
 def build_impact_payload(
     store: LedgerStore,
@@ -164,25 +151,15 @@ def build_impact_payload(
     payload["report_hash"] = stable_hash(payload)
     return payload
 
-
 def _side_meta(compilation: dict[str, Any],
                records: list[dict[str, Any]]) -> dict[str, Any]:
     return {
-        "compilation": {
-            "name": compilation["name"],
-            "rules_hash": compilation["rules_hash"],
-            "scope": compilation["scope"],
-        },
-        "snapshots": [
-            {
-                "id": record["id"],
-                "text_id": record["text_id"],
-                "result_hash": record["result_hash"],
-            }
-            for record in records
-        ],
+        "compilation": {key: compilation[key]
+                        for key in ("name", "rules_hash", "scope")},
+        "snapshots": [{"id": record["id"], "text_id": record["text_id"],
+                       "result_hash": record["result_hash"]}
+                      for record in records],
     }
-
 
 def create_impact(
     store: LedgerStore,

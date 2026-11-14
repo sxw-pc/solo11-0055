@@ -11,7 +11,6 @@ from .errors import fail
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-
 def canonical_json(value: Any) -> str:
     """Canonical bytes-ready JSON: sorted keys, no cosmetic whitespace."""
 
@@ -26,7 +25,6 @@ def canonical_json(value: Any) -> str:
     except (TypeError, ValueError) as exc:
         fail("E_BAD_FORMAT", f"value is not JSON serializable: {exc}")
 
-
 def pretty_json(value: Any) -> str:
     return (
         json.dumps(
@@ -39,10 +37,8 @@ def pretty_json(value: Any) -> str:
         + "\n"
     )
 
-
 def stable_hash(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
-
 
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -54,13 +50,11 @@ def file_sha256(path: Path) -> str:
         fail("E_IO", f"cannot read {path}", reason=str(exc))
     return digest.hexdigest()
 
-
 def read_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         fail("E_IO", f"cannot read UTF-8 text from {path}", reason=str(exc))
-
 
 def write_text(path: Path, text: str) -> Path:
     try:
@@ -71,7 +65,6 @@ def write_text(path: Path, text: str) -> Path:
     except OSError as exc:
         fail("E_IO", f"cannot write {path}", reason=str(exc))
     return path
-
 
 def display_path(path: Path) -> str:
     """A portable, non-machine-specific path for stable reports."""

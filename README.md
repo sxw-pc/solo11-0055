@@ -77,7 +77,7 @@ tree; any path outside it is refused.
 python -m stoplist_ledger [--var-dir var] [--operator op-demo-01] [--now ISO] \
   init
   register FILES... [--kind stoplist|synonym|noise|whitelist]
-  compile DECLARATION [--format json|md] [--out PATH]
+  compile DECLARATION [--scope LABEL] [--format json|md] [--out PATH]
   snapshot TEXT --compilation ID_OR_NAME [--scope LABEL] [--format ...]
   snapshot-all --compilation ID_OR_NAME [--texts-dir DIR] [--format ...]
   diff --left-compilation ID --right-compilation ID [--format json|md]
@@ -128,7 +128,8 @@ are generic function-word examples rather than corpus excerpts.
 | `E_DUP_PRIORITY` | Priority list repeats a table id |
 | `E_REF_NOT_FOUND` | Referenced table version, compilation or snapshot is missing |
 | `E_MERGE_TARGET_NOT_ALLOWED` | Merge target falls outside the declared allow-list |
-| `E_DECL_INVALID` | Declaration is structurally invalid |
+| `E_DECL_INVALID` | Declaration is structurally invalid, including an override id absent from the merged declaration |
+| `E_SCOPE_OVERRIDE_INVALID` | A scope override layer is structurally invalid |
 | `E_CONFIRM_REQUIRED` | `reset` was called without `--yes` |
 | `E_UNSAFE_RESET` | Reset target is outside the default `var/` tree |
 | `E_NOT_LOCAL` | Audit server was asked to bind a non-loopback host |

@@ -20,7 +20,6 @@ KINDS = ("stoplist", "synonym", "noise", "whitelist")
 _ID_RE = re.compile(r"^(?P<table>[A-Za-z0-9][A-Za-z0-9_-]*)_v(?P<version>[1-9]\d*)$")
 _TABLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
-
 @dataclass(frozen=True)
 class ParsedTable:
     kind: str
@@ -29,50 +28,35 @@ class ParsedTable:
     comment_count: int
     term_count: int
 
-
 def infer_kind(path: Path, explicit: str | None = None) -> str:
     suffix = path.suffix.lower()
     if explicit is not None:
         if explicit not in KINDS:
-            fail("E_BAD_FORMAT", "unknown table kind", kind=explicit, allowed=list(KINDS))
+            fail("E_BAD_FORMAT", "unknown table kind",
+                 kind=explicit, allowed=list(KINDS))
         kind = explicit
     elif suffix in {".yaml", ".yml"}:
         kind = "synonym"
     else:
         lowered = path.stem.lower()
-        if "whitelist" in lowered:
-            kind = "whitelist"
-        elif "noise" in lowered:
-            kind = "noise"
-        elif "synonym" in lowered:
-            kind = "synonym"
-        else:
-            kind = "stoplist"
+        kind = next((name for name in ("whitelist", "noise", "synonym")
+                     if name in lowered), "stoplist")
     if kind == "synonym" and suffix not in {".yaml", ".yml"}:
         fail("E_BAD_FORMAT", "synonym tables must be YAML mappings", path=path.name)
     if suffix in {".yaml", ".yml"} and kind != "synonym":
-        fail("E_BAD_FORMAT", "YAML tables are reserved for synonym mappings", path=path.name)
+        fail("E_BAD_FORMAT", "YAML tables are reserved for synonym mappings",
+             path=path.name)
     return kind
-
 
 def parse_table(path: Path, kind: str,
                 policy: NormalizationPolicy) -> ParsedTable:
     text = read_text(path)
     lines = text.splitlines()
     comment_count = sum(1 for line in lines if line.strip().startswith("#"))
-    if kind == "synonym":
-        entries = _parse_synonym_yaml(text, policy, path)
-    else:
-        entries = _parse_txt_terms(lines, policy)
+    entries = (_parse_synonym_yaml(text, policy, path) if kind == "synonym"
+               else _parse_txt_terms(lines, policy))
     terms = {entry["term"] for entry in entries}
-    return ParsedTable(
-        kind=kind,
-        entries=entries,
-        line_count=len(lines),
-        comment_count=comment_count,
-        term_count=len(terms),
-    )
-
+    return ParsedTable(kind, entries, len(lines), comment_count, len(terms))
 
 def _parse_txt_terms(lines: list[str],
                      policy: NormalizationPolicy) -> list[dict[str, Any]]:
@@ -84,7 +68,6 @@ def _parse_txt_terms(lines: list[str],
         term = policy.normalize_validated(raw)
         entries.append({"line": line_no, "raw": raw, "term": term})
     return entries
-
 
 def _parse_synonym_yaml(text: str, policy: NormalizationPolicy,
                         path: Path) -> list[dict[str, Any]]:
@@ -99,35 +82,17 @@ def _parse_synonym_yaml(text: str, policy: NormalizationPolicy,
     entries: list[dict[str, Any]] = []
     for logical_line, (source, target) in enumerate(loaded.items(), start=1):
         if not isinstance(source, str) or not isinstance(target, str):
-            fail(
-                "E_BAD_FORMAT",
-                "synonym keys and targets must be strings",
-                line=logical_line,
-                source_type=type(source).__name__,
-                target_type=type(target).__name__,
-            )
+            fail("E_BAD_FORMAT", "synonym keys and targets must be strings",
+                 line=logical_line, source_type=type(source).__name__,
+                 target_type=type(target).__name__)
         term, normalized_target = policy.validate_mapping_entry(source, target)
-        entries.append(
-            {
-                "line": logical_line,
-                "raw": source,
-                "term": term,
-                "target_raw": target,
-                "target": normalized_target,
-            }
-        )
+        entries.append({"line": logical_line, "raw": source, "term": term,
+                        "target_raw": target, "target": normalized_target})
     return entries
 
-
 def _signatures(entries: list[dict[str, Any]]) -> list[str]:
-    result = []
-    for entry in entries:
-        if "target_raw" in entry:
-            result.append(f"{entry['raw']} => {entry['target_raw']}")
-        else:
-            result.append(entry["raw"])
-    return result
-
+    return [f"{e['raw']} => {e['target_raw']}" if "target_raw" in e
+            else e["raw"] for e in entries]
 
 def diff_entries(previous: list[dict[str, Any]] | None,
                  current: list[dict[str, Any]]) -> dict[str, Any]:
@@ -151,11 +116,11 @@ def diff_entries(previous: list[dict[str, Any]] | None,
             continue
         if tag == "replace":
             pairs = min(i2 - i1, j2 - j1)
-            for offset in range(pairs):
-                modified.append(
-                    {"old": previous[i1 + offset]["line"],
-                     "new": current[j1 + offset]["line"]}
-                )
+            modified.extend(
+                {"old": previous[i1 + offset]["line"],
+                 "new": current[j1 + offset]["line"]}
+                for offset in range(pairs)
+            )
             removed.extend(entry["line"] for entry in previous[i1 + pairs:i2])
             added.extend(entry["line"] for entry in current[j1 + pairs:j2])
         elif tag == "delete":
@@ -164,25 +129,18 @@ def diff_entries(previous: list[dict[str, Any]] | None,
             added.extend(entry["line"] for entry in current[j1:j2])
     return {
         "base_version": previous[0].get("_version") if previous else None,
-        "added": added,
-        "removed": removed,
-        "modified": modified,
-        "added_count": len(added),
-        "removed_count": len(removed),
+        "added": added, "removed": removed, "modified": modified,
+        "added_count": len(added), "removed_count": len(removed),
         "modified_count": len(modified),
     }
 
-
 def _content_hash(kind: str, entries: list[dict[str, Any]]) -> str:
     if kind == "synonym":
-        payload = {
-            "kind": kind,
-            "map": sorted([entry["term"], entry["target"]] for entry in entries),
-        }
+        payload = {"kind": kind,
+                   "map": sorted([e["term"], e["target"]] for e in entries)}
     else:
-        payload = {"kind": kind, "terms": [entry["term"] for entry in entries]}
+        payload = {"kind": kind, "terms": [e["term"] for e in entries]}
     return stable_hash(payload)
-
 
 def infer_identity(path: Path, table_id: str | None,
                    version: int | None) -> tuple[str, int | None]:
@@ -191,15 +149,12 @@ def infer_identity(path: Path, table_id: str | None,
     inferred_version = int(match.group("version")) if match else None
     resolved_table = table_id or inferred_table
     if not resolved_table or not _TABLE_RE.fullmatch(resolved_table):
-        fail(
-            "E_BAD_FORMAT",
-            "table id is missing or invalid; use <id>_v<version>.<ext>",
-            filename=path.name,
-        )
+        fail("E_BAD_FORMAT",
+             "table id is missing or invalid; use <id>_v<version>.<ext>",
+             filename=path.name)
     if version is not None and (not isinstance(version, int) or version < 1):
         fail("E_BAD_FORMAT", "version must be a positive integer", version=version)
     return resolved_table, version if version is not None else inferred_version
-
 
 def register_file(
     store: LedgerStore,
@@ -228,26 +183,18 @@ def register_file(
 
     existing_content = store.find_by_content(content_hash)
     if existing_content:
-        same_slot = (
-            existing_content["table_id"] == resolved_table
-            and existing_content["version"] == requested_version
-        )
+        same_slot = (existing_content["table_id"] == resolved_table
+                     and existing_content["version"] == requested_version)
         if allow_existing and same_slot:
             return existing_content
-        fail(
-            "E_DUP_CONTENT",
-            "identical normalized content is already registered",
-            existing_table=existing_content["table_id"],
-            existing_version=existing_content["version"],
-            content_hash=content_hash,
-        )
+        fail("E_DUP_CONTENT",
+             "identical normalized content is already registered",
+             existing_table=existing_content["table_id"],
+             existing_version=existing_content["version"],
+             content_hash=content_hash)
     if store.get_version(resolved_table, requested_version):
-        fail(
-            "E_DUP_VERSION",
-            "table version exists with different content",
-            table_id=resolved_table,
-            version=requested_version,
-        )
+        fail("E_DUP_VERSION", "table version exists with different content",
+             table_id=resolved_table, version=requested_version)
 
     latest = store.latest_version(resolved_table)
     diff = diff_entries(latest["entries"] if latest else None, parsed.entries)

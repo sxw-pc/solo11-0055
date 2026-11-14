@@ -11,13 +11,11 @@ from .util import canonical_json, pretty_json, write_text
 
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]+")
 
-
 def default_report_path(report_dir: Path, kind: str, identifier: str,
                         fmt: str) -> Path:
     suffix = "md" if fmt == "md" else "json"
     safe = _SAFE.sub("_", identifier).strip("._") or "report"
     return Path(report_dir) / f"{kind}_{safe}.{suffix}"
-
 
 def write_report(payload: dict[str, Any], fmt: str, path: Path) -> Path:
     if fmt == "json":
@@ -26,11 +24,9 @@ def write_report(payload: dict[str, Any], fmt: str, path: Path) -> Path:
         return write_text(Path(path), render_markdown(payload))
     fail("E_BAD_FORMAT", "report format must be json or md", format=fmt)
 
-
 def _cell(value: Any) -> str:
     text = "" if value is None else str(value)
     return text.replace("|", "\\|").replace("\r", " ").replace("\n", " ")
-
 
 def _table(headers: list[str], rows: Iterable[Iterable[Any]]) -> list[str]:
     lines = [
@@ -41,14 +37,12 @@ def _table(headers: list[str], rows: Iterable[Iterable[Any]]) -> list[str]:
         lines.append("| " + " | ".join(_cell(value) for value in row) + " |")
     return lines
 
-
 def _source_label(source: dict[str, Any] | None) -> str:
     if not source:
         return "-"
     if source.get("kind") == "default":
         return "default:keep"
     return f"{source.get('table_id')}@v{source.get('version')} {source.get('rule')}"
-
 
 def _metadata(payload: dict[str, Any]) -> list[str]:
     keys = [
@@ -60,7 +54,6 @@ def _metadata(payload: dict[str, Any]) -> list[str]:
     if not rows:
         return []
     return ["## Metadata", ""] + _table(["Field", "Value"], rows) + [""]
-
 
 def _compilation(payload: dict[str, Any]) -> list[str]:
     lines = _metadata(payload)
@@ -74,6 +67,25 @@ def _compilation(payload: dict[str, Any]) -> list[str]:
         ],
     )
     lines += ["", f"Priority (high to low): {', '.join(payload.get('priority', []))}", ""]
+    if payload.get("scope_override"):
+        lines += ["## Scope override", ""]
+        contract = payload["scope_override"]
+        lines.append(f"Merge contract v{contract['contract_version']} "
+                     f"for scope `{contract['scope']}`")
+        lines.append(
+            f"- priority: {contract['priority']['semantics']} "
+            f"({contract['priority']['layer']})"
+        )
+        lines.append(f"- merge_targets: {contract['merge_targets']['semantics']}")
+        lines.append("- tables: " + ", ".join(
+            f"{table_id}={detail['operation']}/{detail['layer']}"
+            for table_id, detail in contract["tables"].items()
+        ))
+        origins = payload.get("rule_origins", {})
+        lines.append("- rule origins: " + ", ".join(
+            f"{term}={layer}" for term, layer in sorted(origins.items())
+        ))
+        lines.append("")
     lines += ["## Effective rules", ""]
     rows = []
     for rule in payload.get("rules", []):
@@ -94,7 +106,6 @@ def _compilation(payload: dict[str, Any]) -> list[str]:
     lines += [f"- {key}: {counts[key]}" for key in sorted(counts)]
     return lines
 
-
 def _snapshot(payload: dict[str, Any]) -> list[str]:
     lines = _metadata(payload)
     summary = payload.get("summary", {})
@@ -112,7 +123,6 @@ def _snapshot(payload: dict[str, Any]) -> list[str]:
     lines += _table(["#", "Raw", "Offsets", "Normalized", "Disposition",
                      "Target", "Source", "Overrides"], rows)
     return lines
-
 
 def _check(payload: dict[str, Any]) -> list[str]:
     lines = _metadata(payload)
@@ -145,13 +155,11 @@ def _check(payload: dict[str, Any]) -> list[str]:
         ]
     return lines
 
-
 def _outcome(value: dict[str, Any] | None) -> str:
     if value is None:
         return "missing"
     target = f" -> {value['target']}" if value.get("target") else ""
     return f"{value['disposition']}{target}"
-
 
 def _impact(payload: dict[str, Any]) -> list[str]:
     lines = _metadata(payload)
@@ -201,7 +209,6 @@ def _impact(payload: dict[str, Any]) -> list[str]:
         lines.append("")
     return lines
 
-
 def _summary(payload: dict[str, Any]) -> list[str]:
     lines = _metadata(payload)
     for heading, key in (("Counts", "counts"), ("Artifacts", "artifacts"),
@@ -218,7 +225,6 @@ def _summary(payload: dict[str, Any]) -> list[str]:
             lines += [str(value)]
         lines.append("")
     return lines
-
 
 def render_markdown(payload: dict[str, Any]) -> str:
     kind = payload.get("kind", "report")
