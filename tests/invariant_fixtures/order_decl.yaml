@@ -1,0 +1,10 @@
+name: invariant-order
+scope: "*"
+normalization:
+  case: nfkc_lower
+  whitespace: collapse
+tables:
+  - id: order_stop
+    version: 1
+    scopes: ["*"]
+priority: [order_stop]

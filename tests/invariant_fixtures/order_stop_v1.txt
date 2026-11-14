@@ -1,0 +1,7 @@
+# Invariant fixture: terms deliberately kept out of sorted order.
+zeta
+alpha
+mu
+beta
+kappa
+gamma

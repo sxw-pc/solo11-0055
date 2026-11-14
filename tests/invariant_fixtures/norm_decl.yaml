@@ -1,0 +1,10 @@
+name: invariant-norm
+scope: "*"
+normalization:
+  case: nfkc_lower
+  whitespace: collapse
+tables:
+  - id: norm_stop
+    version: 1
+    scopes: ["*"]
+priority: [norm_stop]

@@ -1,0 +1,4 @@
+# Invariant fixture: every raw token differs from its nfkc_lower term.
+alpha
+beta
+colour

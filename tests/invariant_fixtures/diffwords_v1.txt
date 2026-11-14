@@ -1,0 +1,6 @@
+# Invariant fixture for diff line self-consistency, version 1.
+alpha
+beta
+gamma
+delta
+eta

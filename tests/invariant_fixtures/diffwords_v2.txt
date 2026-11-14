@@ -1,0 +1,8 @@
+# Invariant fixture for diff line self-consistency, version 2.
+alpha
+beta2
+gamma
+# blank line below keeps entry lines off their positional index
+
+eta
+kappa
