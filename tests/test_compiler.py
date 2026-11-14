@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from conftest import FIXTURES, compile_fixture
+from conftest import FIXTURES, compile_fixture, register_table
 from stoplist_ledger.compiler import (
     build_compilation,
     load_declaration,
@@ -53,16 +53,20 @@ def test_declaration_hash_is_stable(populated) -> None:
     )["declaration_hash"]
 
 
-def test_priority_override_chain(tmp_path: Path, populated) -> None:
+def test_priority_override_chain(tmp_path: Path, populated, clock) -> None:
+    table_path = tmp_path / "override_syn_v1.yaml"
+    table_path.write_text("alpha: alphacore\n", encoding="utf-8")
+    register_table(populated, clock, table_path)
     declaration = {
         "name": "override-check",
         "scope": "lang-mix",
         "normalization": {"case": "nfkc_lower", "whitespace": "collapse"},
         "tables": [
             {"id": "conflict_stop", "version": 1, "scopes": ["*"]},
-            {"id": "broken_synonym", "version": 1, "scopes": ["*"]},
+            {"id": "override_syn", "version": 1, "scopes": ["*"]},
         ],
-        "priority": ["conflict_stop", "broken_synonym"],
+        "priority": ["conflict_stop", "override_syn"],
+        "merge_targets": ["alphacore"],
     }
     path = tmp_path / "override.yaml"
     path.write_text(yaml.safe_dump(declaration, sort_keys=False), encoding="utf-8")
@@ -70,8 +74,7 @@ def test_priority_override_chain(tmp_path: Path, populated) -> None:
     rules = {rule["term"]: rule for rule in compilation["rules"]}
     assert rules["alpha"]["disposition"] == "drop"
     assert rules["alpha"]["overridden_by"][0]["disposition"] == "merge"
-    assert rules["alpha"]["overridden_by"][0]["source"]["table_id"] == "broken_synonym"
-    assert rules["xcycle"]["overridden_by"] == []
+    assert rules["alpha"]["overridden_by"][0]["source"]["table_id"] == "override_syn"
 
 
 def test_missing_table_version(tmp_path: Path, populated) -> None:

@@ -107,11 +107,17 @@ Validation rules:
 - A table is active if the declaration scope is `*`/`all`, or the table scope
   contains `*`, `all` or the declaration scope.
 - Missing normalizations default to `nfkc_lower` + `collapse`.
-- If `merge_targets` is present, every effective merge target must appear in it
-  after declaration-policy normalization.
+- If `merge_targets` is present, the final endpoint of every merge chain must
+  appear in it after declaration-policy normalization.
+
+Merge targets are resolved transitively at compile time: a merge rule's
+`target` is the final endpoint of its synonym chain, and `merge_chain` records
+each hop (`term`, `target`, `source`). Chains that loop, end at a dropped term
+or end at an unknown term fail compilation.
 
 Compiler failure codes include `E_DECL_INVALID`, `E_BAD_POLICY`,
-`E_REF_NOT_FOUND`, `E_DUP_PRIORITY` and `E_MERGE_TARGET_NOT_ALLOWED`.
+`E_REF_NOT_FOUND`, `E_DUP_PRIORITY`, `E_MERGE_TARGET_NOT_ALLOWED`,
+`E_MERGE_CYCLE`, `E_MERGE_TARGET_DROPPED` and `E_MERGE_TARGET_MISSING`.
 
 ## 6. Stored table-version record
 
@@ -175,7 +181,9 @@ Diff object:
 
 Rules are sorted by `term`. `overridden_by` preserves priority order; each entry
 contains the losing `disposition`, `target`, `source` and a reason. Equal losers
-appear under `supporting_sources`.
+appear under `supporting_sources`. Merge rules additionally carry
+`merge_chain`: the ordered synonym hops walked to reach the final `target`,
+each with the `source` table of that hop.
 
 ## 8. Snapshot JSON
 
@@ -260,7 +268,7 @@ the field itself or database metadata.
      "subject": "alpha", "message": "the same term has multiple dispositions",
      "details": {"term": "alpha", "proposals": []}}
   ],
-  "summary": {"total_issues": 9, "by_code": {"C01": 1}},
+  "summary": {"total_issues": 8, "by_code": {"C01": 1}},
   "generated_at": "2024-01-01T00:00:00Z",
   "report_hash": "..."
 }
@@ -269,13 +277,14 @@ the field itself or database metadata.
 | Code | Meaning | Severity |
 | --- | --- | --- |
 | `C01` | Same term disposed differently by non-whitelist tables | warning |
-| `C02` | Directed synonym cycle | error |
-| `C03` | Merge target missing from vocabulary/allow-list | error |
+| `C02` | Directed synonym cycle in winning merge proposals | error |
+| `C03` | Merge chain endpoint missing from vocabulary/allow-list | error |
 | `C04` | Case variants remain distinct under declaration policy | warning |
 | `C05` | Referenced table version missing | error |
 | `C06` | Duplicate priority id | error |
 | `C07` | Referenced table version is empty | error |
 | `C08` | Whitelist term also present in stop/noise table | warning |
+| `C09` | Merge chain endpoint dropped by a higher-priority table | error |
 
 Findings are sorted by code, subject, then canonical details. Reports deduplicate
 by `report_hash`.

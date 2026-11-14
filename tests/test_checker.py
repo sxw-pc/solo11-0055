@@ -24,7 +24,7 @@ def test_broken_declaration_triggers_all_eight_codes(populated, clock) -> None:
     by_code = report["summary"]["by_code"]
     assert by_code["C01"] == 1
     assert by_code["C02"] == 1
-    assert by_code["C03"] == 2
+    assert by_code["C03"] == 1
     assert report["status"] == "issues"
     subjects = {(finding["code"], finding["subject"])
                 for finding in report["findings"]}
@@ -184,3 +184,91 @@ def test_check_unknown_declaration_raises(store, clock, tmp_path) -> None:
     with pytest.raises(LedgerError) as caught:
         check_declaration(store, tmp_path / "absent.yaml", clock)
     assert caught.value.code == "E_IO"
+
+
+def test_cycle_and_missing_follow_winning_proposals(populated, clock,
+                                                    tmp_path) -> None:
+    path = _declaration(
+        tmp_path,
+        "priority-check.yaml",
+        {
+            "name": "priority-check",
+            "scope": "*",
+            "normalization": {"case": "case_sensitive", "whitespace": "trim"},
+            "tables": [
+                {"id": "conflict_stop", "version": 1},
+                {"id": "broken_synonym", "version": 1},
+            ],
+            "priority": ["conflict_stop", "broken_synonym"],
+        },
+    )
+    report = check_declaration(populated, path, clock)
+    c03_subjects = {finding["subject"] for finding in report["findings"]
+                    if finding["code"] == "C03"}
+    # alpha's merge lost priority to the drop, so alphacore is never walked.
+    assert c03_subjects == {"missingtarget"}
+    c02 = next(item for item in report["findings"] if item["code"] == "C02")
+    assert c02["details"]["cycle"] == ["xcycle", "ycycle", "xcycle"]
+
+
+def test_dropped_endpoint_triggers_c09(populated, clock, tmp_path) -> None:
+    from conftest import register_table
+
+    stop = tmp_path / "grey_stop_v1.txt"
+    stop.write_text("grey\n", encoding="utf-8")
+    register_table(populated, clock, stop)
+    synonym = tmp_path / "grey_syn_v1.yaml"
+    synonym.write_text("gray: grey\n", encoding="utf-8")
+    register_table(populated, clock, synonym)
+    path = _declaration(
+        tmp_path,
+        "dropped.yaml",
+        {
+            "name": "dropped-check",
+            "scope": "*",
+            "normalization": {"case": "nfkc_lower", "whitespace": "collapse"},
+            "tables": [
+                {"id": "grey_stop", "version": 1},
+                {"id": "grey_syn", "version": 1},
+            ],
+            "priority": ["grey_stop", "grey_syn"],
+        },
+    )
+    report = check_declaration(populated, path, clock)
+    c09 = next(item for item in report["findings"] if item["code"] == "C09")
+    assert c09["name"] == "merge_target_dropped"
+    assert c09["severity"] == "error"
+    assert c09["subject"] == "grey"
+    assert c09["details"]["term"] == "gray"
+    assert c09["details"]["dropped_by"]["table_id"] == "grey_stop"
+    assert "C03" not in {finding["code"] for finding in report["findings"]}
+
+
+def test_checker_and_compiler_agree_on_chain(populated, clock, tmp_path) -> None:
+    from conftest import register_table
+    from stoplist_ledger.compiler import build_compilation
+
+    high = tmp_path / "agree_hi_v1.yaml"
+    high.write_text("gray: grey\n", encoding="utf-8")
+    low = tmp_path / "agree_lo_v1.yaml"
+    low.write_text("grey: color\n", encoding="utf-8")
+    register_table(populated, clock, high)
+    register_table(populated, clock, low)
+    payload = {
+        "name": "agree",
+        "scope": "*",
+        "normalization": {"case": "nfkc_lower", "whitespace": "collapse"},
+        "tables": [
+            {"id": "agree_hi", "version": 1},
+            {"id": "agree_lo", "version": 1},
+            {"id": "whitelist", "version": 1},
+        ],
+        "priority": ["agree_hi", "agree_lo", "whitelist"],
+        "merge_targets": ["color"],
+    }
+    path = _declaration(tmp_path, "agree.yaml", payload)
+    report = check_declaration(populated, path, clock)
+    assert report["findings"] == []
+    compilation = build_compilation(populated, path)
+    rules = {rule["term"]: rule for rule in compilation["rules"]}
+    assert rules["gray"]["target"] == "color"

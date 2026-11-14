@@ -131,6 +131,51 @@ def test_compare_rule_sets_merge_transition() -> None:
     }]
 
 
+def test_impact_uses_resolved_merge_targets(tmp_path, populated, clock) -> None:
+    import yaml
+
+    from conftest import register_table
+    from stoplist_ledger.compiler import build_compilation
+
+    synonym = tmp_path / "impact_syn_v1.yaml"
+    synonym.write_text("gray: grey\n", encoding="utf-8")
+    register_table(populated, clock, synonym)
+    for version, target in ((1, "color"), (2, "silver")):
+        downstream = tmp_path / f"impact_down_v{version}.yaml"
+        downstream.write_text(f"grey: {target}\n", encoding="utf-8")
+        register_table(populated, clock, downstream)
+
+    def build(version: int) -> dict:
+        declaration = {
+            "name": f"impact-closure-v{version}",
+            "scope": "*",
+            "normalization": {"case": "nfkc_lower", "whitespace": "collapse"},
+            "tables": [
+                {"id": "impact_syn", "version": 1},
+                {"id": "impact_down", "version": version},
+            ],
+            "priority": ["impact_syn", "impact_down"],
+            "merge_targets": ["color", "silver"],
+        }
+        path = tmp_path / f"impact-closure-v{version}.yaml"
+        path.write_text(yaml.safe_dump(declaration), encoding="utf-8")
+        return build_compilation(populated, path)
+
+    changes = compare_rule_sets(build(1)["rules"], build(2)["rules"])
+    assert changes["merge_target_changes"] == [
+        {
+            "term": "gray",
+            "before": {"disposition": "merge", "target": "color"},
+            "after": {"disposition": "merge", "target": "silver"},
+        },
+        {
+            "term": "grey",
+            "before": {"disposition": "merge", "target": "color"},
+            "after": {"disposition": "merge", "target": "silver"},
+        },
+    ]
+
+
 def test_compare_rule_sets_input_order_does_not_matter() -> None:
     left = [
         {"term": "z", "disposition": "drop", "target": None},

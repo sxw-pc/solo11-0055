@@ -115,21 +115,25 @@ def test_keep_token_has_default_source(populated, clock) -> None:
     assert gamma["overridden_by"] == []
 
 
-def test_snapshot_includes_override_chain(tmp_path, populated) -> None:
+def test_snapshot_includes_override_chain(tmp_path, populated, clock) -> None:
     import yaml
 
-    from conftest import FIXTURES
+    from conftest import register_table
     from stoplist_ledger.compiler import build_compilation
 
+    table_path = tmp_path / "override_syn_v1.yaml"
+    table_path.write_text("alpha: alphacore\n", encoding="utf-8")
+    register_table(populated, clock, table_path)
     declaration = {
         "name": "override-snapshot",
         "scope": "*",
         "normalization": {"case": "nfkc_lower", "whitespace": "collapse"},
         "tables": [
             {"id": "conflict_stop", "version": 1},
-            {"id": "broken_synonym", "version": 1},
+            {"id": "override_syn", "version": 1},
         ],
-        "priority": ["conflict_stop", "broken_synonym"],
+        "priority": ["conflict_stop", "override_syn"],
+        "merge_targets": ["alphacore"],
     }
     decl_path = tmp_path / "override.yaml"
     decl_path.write_text(yaml.safe_dump(declaration), encoding="utf-8")
@@ -141,6 +145,39 @@ def test_snapshot_includes_override_chain(tmp_path, populated) -> None:
     assert token["disposition"] == "drop"
     assert len(token["overridden_by"]) == 1
     assert token["overridden_by"][0]["disposition"] == "merge"
+
+
+def test_snapshot_uses_final_merge_target(tmp_path, populated, clock) -> None:
+    import yaml
+
+    from conftest import register_table
+    from stoplist_ledger.compiler import build_compilation
+
+    high = tmp_path / "chain_hi_v1.yaml"
+    high.write_text("gray: grey\n", encoding="utf-8")
+    low = tmp_path / "chain_lo_v1.yaml"
+    low.write_text("grey: color\n", encoding="utf-8")
+    register_table(populated, clock, high)
+    register_table(populated, clock, low)
+    declaration = {
+        "name": "chain-snapshot",
+        "scope": "*",
+        "normalization": {"case": "nfkc_lower", "whitespace": "collapse"},
+        "tables": [
+            {"id": "chain_hi", "version": 1},
+            {"id": "chain_lo", "version": 1},
+        ],
+        "priority": ["chain_hi", "chain_lo"],
+        "merge_targets": ["color"],
+    }
+    decl_path = tmp_path / "chain.yaml"
+    decl_path.write_text(yaml.safe_dump(declaration), encoding="utf-8")
+    compilation = build_compilation(populated, decl_path)
+    text = tmp_path / "chain.txt"
+    text.write_text("gray grey\n", encoding="utf-8")
+    record = build_snapshot(compilation, text)
+    targets = {token["term"]: token["target"] for token in record["tokens"]}
+    assert targets == {"gray": "color", "grey": "color"}
 
 
 def test_snapshot_stores_text_hash_and_source(populated, clock) -> None:

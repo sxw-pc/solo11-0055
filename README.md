@@ -128,6 +128,9 @@ are generic function-word examples rather than corpus excerpts.
 | `E_DUP_PRIORITY` | Priority list repeats a table id |
 | `E_REF_NOT_FOUND` | Referenced table version, compilation or snapshot is missing |
 | `E_MERGE_TARGET_NOT_ALLOWED` | Merge target falls outside the declared allow-list |
+| `E_MERGE_CYCLE` | Synonym merge chain loops back on itself |
+| `E_MERGE_TARGET_DROPPED` | Merge chain ends at a term dropped by a higher-priority table |
+| `E_MERGE_TARGET_MISSING` | Merge chain ends at a term absent from all tables and the allow-list |
 | `E_DECL_INVALID` | Declaration is structurally invalid |
 | `E_CONFIRM_REQUIRED` | `reset` was called without `--yes` |
 | `E_UNSAFE_RESET` | Reset target is outside the default `var/` tree |
@@ -137,7 +140,7 @@ are generic function-word examples rather than corpus excerpts.
 Checker codes are separate: `C01` contradictory disposition, `C02` merge cycle,
 `C03` missing merge target, `C04` case-variant duplicate, `C05` missing table
 version, `C06` duplicate priority, `C07` empty table version, `C08` whitelist
-term also covered by a drop table.
+term also covered by a drop table, `C09` merge chain ending at a dropped term.
 
 ## Directory map
 

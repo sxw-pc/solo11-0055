@@ -8,6 +8,15 @@ from typing import Any, Mapping
 import yaml
 
 from .clock import FixedClock
+from .closure import (
+    CYCLE,
+    DROPPED,
+    NOT_ALLOWED,
+    OK,
+    iter_candidates,
+    resolve_merge_chains,
+    table_in_scope,
+)
 from .errors import fail
 from .normalizer import NormalizationPolicy
 from .store import LedgerStore
@@ -85,38 +94,33 @@ def load_declaration(path: Path) -> dict[str, Any]:
     return declaration
 
 
-def table_in_scope(scope: str, scopes: list[str]) -> bool:
-    if scope in {"*", "all"}:
-        return True
-    return any(item in {"*", "all", scope} for item in scopes)
-
-
-def _proposal(source: dict[str, Any], disposition: str,
-              target: str | None = None) -> dict[str, Any]:
-    return {
-        "disposition": disposition,
-        "target": target,
-        "source": source | {"rule": f"{source['kind']}:{disposition}"},
-    }
-
-
-def _source(table: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "table_id": table["table_id"],
-        "version": table["version"],
-        "kind": table["kind"],
-        "line": entry["line"],
-        "raw": entry["raw"],
-    }
+def _fail_closure(term: str, resolution: dict[str, Any],
+                  allowed: set[str] | None) -> None:
+    details = {"term": term, "chain": resolution["chain"]}
+    if resolution["status"] == CYCLE:
+        fail("E_MERGE_CYCLE", "synonym merge chain loops back on itself",
+             cycle=resolution["cycle"], **details)
+    if resolution["status"] == DROPPED:
+        fail("E_MERGE_TARGET_DROPPED",
+             "merge chain ends at a term dropped by a higher-priority table",
+             target=resolution["endpoint"],
+             dropped_by=resolution["dropped_by"], **details)
+    if resolution["status"] == NOT_ALLOWED:
+        fail("E_MERGE_TARGET_NOT_ALLOWED",
+             "merge target is outside declaration allow-list",
+             target=resolution["endpoint"],
+             allowed=sorted(allowed or ()), **details)
+    fail("E_MERGE_TARGET_MISSING",
+         "merge chain ends at a term absent from all tables",
+         target=resolution["endpoint"], **details)
 
 
 def build_rules(
     declaration: dict[str, Any],
     versions: dict[str, dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
-    """Resolve proposals by declared priority; first proposal wins."""
+    """Resolve proposals by priority, then close merge targets transitively."""
 
-    policy: NormalizationPolicy = declaration["policy"]
     scope = declaration["scope"]
     refs = [ref for ref in declaration["tables"]
             if table_in_scope(scope, ref["scopes"])]
@@ -134,7 +138,6 @@ def build_rules(
         fail("E_DECL_INVALID", "active tables are absent from priority",
              tables=missing_priority)
 
-    proposals: dict[str, dict[str, Any]] = {}
     table_trace: list[dict[str, Any]] = []
     for table_id in declaration["priority"]:
         if table_id not in active_ids:
@@ -150,46 +153,43 @@ def build_rules(
                 "entry_count": table["entry_count"],
             }
         )
-        for entry in table["entries"]:
-            term = policy.normalize_validated(entry["raw"])
-            source = _source(table, entry)
-            if table["kind"] in {"stoplist", "noise"}:
-                candidate = _proposal(source, "drop")
-            elif table["kind"] == "whitelist":
-                candidate = _proposal(source, "whitelist_exempt")
-            else:
-                target = policy.normalize_validated(entry["target_raw"])
-                candidate = _proposal(source, "merge", target)
-            if term not in proposals:
-                proposals[term] = candidate | {"term": term, "overridden_by": []}
-                continue
-            current = proposals[term]
-            if (current["disposition"], current["target"]) != (
-                candidate["disposition"], candidate["target"]
-            ):
-                current["overridden_by"].append(
-                    {
-                        "disposition": candidate["disposition"],
-                        "target": candidate["target"],
-                        "source": candidate["source"],
-                        "reason": "lower priority than winning proposal",
-                    }
-                )
-            else:
-                current.setdefault("supporting_sources", []).append(candidate["source"])
+
+    proposals: dict[str, dict[str, Any]] = {}
+    for term, candidate in iter_candidates(declaration, versions.values()):
+        if term not in proposals:
+            proposals[term] = candidate | {"term": term, "overridden_by": []}
+            continue
+        current = proposals[term]
+        if (current["disposition"], current["target"]) != (
+            candidate["disposition"], candidate["target"]
+        ):
+            current["overridden_by"].append(
+                {
+                    "disposition": candidate["disposition"],
+                    "target": candidate["target"],
+                    "source": candidate["source"],
+                    "reason": "lower priority than winning proposal",
+                }
+            )
+        else:
+            current.setdefault("supporting_sources", []).append(candidate["source"])
 
     merge_targets = declaration["merge_targets"]
-    if merge_targets is not None:
-        allowed = {policy.normalize_validated(target) for target in merge_targets}
-        for rule in proposals.values():
-            if rule["disposition"] == "merge" and rule["target"] not in allowed:
-                fail(
-                    "E_MERGE_TARGET_NOT_ALLOWED",
-                    "merge target is outside declaration allow-list",
-                    term=rule["term"],
-                    target=rule["target"],
-                    allowed=sorted(allowed),
-                )
+    allowed = (
+        {declaration["policy"].normalize_validated(target)
+         for target in merge_targets}
+        if merge_targets is not None
+        else None
+    )
+    resolutions = resolve_merge_chains(proposals, allowed)
+    for term in sorted(resolutions):
+        resolution = resolutions[term]
+        if resolution["status"] != OK:
+            _fail_closure(term, resolution, allowed)
+        rule = proposals[term]
+        rule["target"] = resolution["endpoint"]
+        rule["merge_chain"] = resolution["chain"]
+
     rules = sorted(proposals.values(), key=lambda rule: rule["term"])
     counts = {name: 0 for name in DISPOSITIONS}
     for rule in rules:

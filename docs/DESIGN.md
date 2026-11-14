@@ -11,7 +11,7 @@ local text fixture ──snapshot──────────> token trace + r
                                         │
 two snapshot sets ──impact─────────────> rule/text change report
                                         │
-declaration + ledger ──check──────────> C01..C08 report
+declaration + ledger ──check──────────> C01..C09 report
                                         │
                       read-only Flask UI / JSON API / Markdown+JSON files
 ```
@@ -102,9 +102,17 @@ source offsets.
 6. The first proposal for a normalized term wins. Later proposals with a
    different disposition/target enter the winner's `overridden_by` chain; equal
    proposals become `supporting_sources`.
-7. If `merge_targets` is present, every effective merge target must normalize to
+7. Every winning merge proposal is then closed transitively: the chain walks
+   winning proposals only, regardless of which table supplied each hop. The
+   rule's `target` becomes the final endpoint and `merge_chain` records every
+   hop (`term`, `target`, `source`) for audit. A chain that loops fails with
+   `E_MERGE_CYCLE` (details carry the loop); a chain ending at a term dropped
+   by a higher-priority table fails with `E_MERGE_TARGET_DROPPED`; a chain
+   ending at a term absent from all tables fails with
+   `E_MERGE_TARGET_MISSING` unless the allow-list vouches for it.
+8. If `merge_targets` is present, the resolved final endpoint must normalize to
    an allow-list member, otherwise `E_MERGE_TARGET_NOT_ALLOWED`.
-8. Sort rules by normalized term. Count dispositions. Hash scope, normalization,
+9. Sort rules by normalized term. Count dispositions. Hash scope, normalization,
    active tables (id/version/kind/content hash), priority and rules.
 
 Each entry's `source` names the table id, version, kind, source line, raw form
@@ -163,12 +171,18 @@ The checker intentionally remains useful when a declaration would not compile:
 
 - `C01` contradictory non-whitelist dispositions (drop vs merge);
 - `C02` directed synonym cycles, canonicalized to a stable rotation;
-- `C03` synonym targets absent from all referenced table terms and allow-lists;
+- `C03` merge chains whose final endpoint is absent from all referenced table
+  terms and the allow-list;
 - `C04` case variants that remain distinct under the declaration's normalization;
 - `C05` missing table version;
 - `C06` duplicate priority entry;
 - `C07` referenced empty table version;
-- `C08` whitelist/drop overlap.
+- `C08` whitelist/drop overlap;
+- `C09` merge chains whose final endpoint is dropped by a higher-priority table.
+
+`C02`, `C03` and `C09` walk the same priority-resolved winning proposals as the
+compiler (via `closure.py`), so a chain the checker flags always fails
+compilation with the matching error and vice versa.
 
 Findings are sorted by code, subject and canonical details. The report stores code
 counts and a stable hash.
@@ -191,6 +205,6 @@ counts and a stable hash.
 ## Known simplifications
 
 No stemming, language detection, phrase matching, word segmentation model,
-transitive synonym closure, distributed compilation, table editing or remote
-synchronization is implemented. Synonym cycles are reported, not repaired.
-Scopes are opaque placeholder labels.
+distributed compilation, table editing or remote synchronization is
+implemented. Synonym cycles are reported, not repaired. Scopes are opaque
+placeholder labels.

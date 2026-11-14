@@ -2,7 +2,7 @@
   "compilation": {
     "name": "pipeline-a",
     "rule_count": 14,
-    "rules_hash": "93b72805fe4c5d9ff814a0a30e00da5f385a263f132559289a95f2c8eb655f7e",
+    "rules_hash": "53e469b4b3f8574b3df9b6f8861244888913b0e3104126eff7dce6fd7b95db6f",
     "scope": "lang-mix"
   },
   "kind": "snapshot",
@@ -10,7 +10,7 @@
     "case": "nfkc_lower",
     "whitespace": "collapse"
   },
-  "result_hash": "e376e48409f268856995d683e7a76f30802adfae8da5259db66aa4a98eb78b50",
+  "result_hash": "3fddeed3857fe8c1e67b2a669cf4e895f83e624f240ed1e0ff17630e6713cc93",
   "schema_version": 1,
   "scope": "lang-mix",
   "summary": {

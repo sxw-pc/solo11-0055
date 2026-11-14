@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 from stoplist_ledger.clock import FixedClock
 from stoplist_ledger.compiler import compile_declaration
 from stoplist_ledger.demo import register_fixtures
+from stoplist_ledger.registry import register_file
 from stoplist_ledger.snapshot import snapshot_many
 from stoplist_ledger.store import LedgerStore
 
@@ -39,6 +40,12 @@ def compile_fixture(store: LedgerStore, clock: FixedClock,
                     name: str = "pipeline_a.yaml") -> dict:
     return compile_declaration(store, FIXTURES / "declarations" / name, clock,
                                "op-test-01")
+
+
+def register_table(store: LedgerStore, clock: FixedClock, path: Path) -> dict:
+    """Register one ad-hoc table file built inside a test."""
+
+    return register_file(store, path, clock, "op-test-01")
 
 
 def snapshot_set(store: LedgerStore, clock: FixedClock,

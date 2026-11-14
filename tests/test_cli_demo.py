@@ -201,7 +201,7 @@ def test_cli_compile_snapshot_diff_check(tmp_path: Path, capsys) -> None:
         FIXTURES / "declarations" / "broken_conflict.yaml"
     )]) == 0
     check_result = _json_tail(capsys)
-    assert check_result["total_issues"] == 9
+    assert check_result["total_issues"] == 8
     assert check_result["status"] == "issues"
 
 
@@ -242,5 +242,6 @@ def test_scale_and_test_ratio() -> None:
     )
     total = production_lines + test_lines
     ratio = test_lines / total
-    assert 2500 <= total <= 4500, (production_lines, test_lines, total)
+    # Cap raised from 4500 when merge-chain closure landed (closure.py + tests).
+    assert 2500 <= total <= 5200, (production_lines, test_lines, total)
     assert 0.35 <= ratio <= 0.45, (test_lines, total, ratio)

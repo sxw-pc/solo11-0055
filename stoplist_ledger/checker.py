@@ -1,4 +1,4 @@
-"""Eight deterministic consistency and conflict checks."""
+"""Nine deterministic consistency and conflict checks."""
 
 from __future__ import annotations
 
@@ -9,7 +9,15 @@ from pathlib import Path
 from typing import Any
 
 from .clock import FixedClock
-from .compiler import load_declaration, table_in_scope
+from .closure import (
+    CYCLE,
+    DROPPED,
+    MISSING,
+    resolve_merge_chains,
+    table_in_scope,
+    winning_proposals,
+)
+from .compiler import load_declaration
 from .normalizer import NormalizationPolicy
 from .store import LedgerStore
 from .util import canonical_json, stable_hash
@@ -23,6 +31,7 @@ CHECK_NAMES = {
     "C06": "duplicate_priority",
     "C07": "empty_table_version",
     "C08": "whitelist_overridden",
+    "C09": "merge_target_dropped",
 }
 _WS = re.compile(r"\s+")
 
@@ -41,29 +50,6 @@ def _finding(code: str, subject: str, message: str, details: dict[str, Any],
 
 def _canonical_variant(term: str) -> str:
     return _WS.sub(" ", unicodedata.normalize("NFKC", term).casefold()).strip()
-
-
-def _cycle_signature(cycle: list[str]) -> tuple[str, ...]:
-    pivot = min(range(len(cycle)), key=lambda index: cycle[index])
-    rotated = cycle[pivot:] + cycle[:pivot]
-    return tuple(rotated)
-
-
-def _find_cycles(graph: dict[str, str]) -> list[list[str]]:
-    cycles: set[tuple[str, ...]] = set()
-    for start in sorted(graph):
-        path: list[str] = []
-        positions: dict[str, int] = {}
-        current: str | None = start
-        while current is not None and current in graph:
-            if current in positions:
-                cycle = path[positions[current]:]
-                cycles.add(_cycle_signature(cycle))
-                break
-            positions[current] = len(path)
-            path.append(current)
-            current = graph[current]
-    return [list(cycle) for cycle in sorted(cycles)]
 
 
 def _active_versions(
@@ -128,20 +114,15 @@ def run_checks(declaration: dict[str, Any],
     proposals: dict[str, list[dict[str, Any]]] = defaultdict(list)
     whitelist_terms: dict[str, list[dict[str, Any]]] = defaultdict(list)
     drop_terms: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    graph: dict[str, str] = {}
-    defined = {policy.normalize_validated(target)
-               for target in (declaration["merge_targets"] or [])}
     for version in versions:
         for entry in version["entries"]:
             term = policy.normalize_validated(entry["raw"])
-            defined.add(term)
             source = {"table_id": version["table_id"],
                       "version": version["version"],
                       "kind": version["kind"], "line": entry["line"],
                       "raw": entry["raw"]}
             if version["kind"] == "synonym":
                 target = policy.normalize_validated(entry["target_raw"])
-                graph[term] = target
                 proposals[term].append(source | {"disposition": "merge",
                                                  "target": target})
             elif version["kind"] in {"stoplist", "noise"}:
@@ -171,23 +152,46 @@ def run_checks(declaration: dict[str, Any],
                 )
             )
 
-    for cycle in _find_cycles(graph):
-        findings.append(
-            _finding(
-                "C02", " -> ".join(cycle + [cycle[0]]),
-                "synonym mapping contains a directed cycle",
-                {"cycle": cycle + [cycle[0]]},
-                "error",
-            )
-        )
-
-    for term, target in sorted(graph.items()):
-        if target not in defined:
+    allowed = (
+        {policy.normalize_validated(target)
+         for target in declaration["merge_targets"]}
+        if declaration["merge_targets"] is not None
+        else None
+    )
+    resolutions = resolve_merge_chains(
+        winning_proposals(declaration, versions), allowed
+    )
+    for term in sorted(resolutions):
+        resolution = resolutions[term]
+        if resolution["status"] == CYCLE:
+            cycle = resolution["cycle"]
             findings.append(
                 _finding(
-                    "C03", target,
-                    "synonym target is absent from all referenced tables and allow-lists",
-                    {"term": term, "target": target},
+                    "C02", " -> ".join(cycle),
+                    "synonym mapping contains a directed cycle",
+                    {"cycle": cycle},
+                    "error",
+                )
+            )
+        elif resolution["status"] == DROPPED:
+            findings.append(
+                _finding(
+                    "C09", resolution["endpoint"],
+                    "merge chain ends at a term dropped by a higher-priority table",
+                    {"term": term, "target": resolution["endpoint"],
+                     "dropped_by": resolution["dropped_by"],
+                     "chain": resolution["chain"]},
+                    "error",
+                )
+            )
+        elif resolution["status"] == MISSING:
+            findings.append(
+                _finding(
+                    "C03", resolution["endpoint"],
+                    "synonym target is absent from all referenced tables "
+                    "and allow-lists",
+                    {"term": term, "target": resolution["endpoint"],
+                     "chain": resolution["chain"]},
                     "error",
                 )
             )
