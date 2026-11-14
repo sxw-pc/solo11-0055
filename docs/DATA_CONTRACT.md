@@ -197,7 +197,13 @@ appear under `supporting_sources`.
   ],
   "summary": {"token_count": 7, "keep": 1, "drop": 3, "merge": 2,
               "whitelist_exempt": 1, "affected": 6},
-  "result_hash": "..."
+  "result_hash": "...",
+  "lookup_stats": {
+    "token_count": 512, "lookups": 512, "hits": 96, "misses": 416,
+    "index_reused": true, "index_term_count": 14,
+    "index_bucket_count": 9, "candidate_bucket_max": 4,
+    "candidate_bucket_total": 2048
+  }
 }
 ```
 
@@ -206,7 +212,15 @@ and whitespace are separators, not tokens. `_` is retained inside words.
 `keep` tokens use source kind `default` and rule `default:keep`.
 
 `result_hash` covers text id/hash, compilation identity, scope, policy, tokens
-and summary. It does not cover database ids, relative source path or timestamps.
+and summary. It does not cover database ids, relative source path, timestamps or
+`lookup_stats`.
+
+`lookup_stats` is optional operational metadata emitted only when the text has
+more than 64 tokens. It reports the number of term lookups, direct hits and
+misses, whether the process-local rule index was reused, the index term and
+bucket counts, and the size of the length-bucketed candidate sets consulted.
+It contains no clock value or machine identifier, so repeated snapshots stay
+byte-identical, and it is never folded into `result_hash`.
 
 ## 9. Impact JSON
 

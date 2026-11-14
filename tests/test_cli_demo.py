@@ -15,7 +15,6 @@ from stoplist_ledger.clock import FixedClock
 from stoplist_ledger.demo import run_demo, safe_reset
 from stoplist_ledger.errors import LedgerError
 
-
 def test_demo_is_repeatable(tmp_path: Path) -> None:
     clock = FixedClock("2024-01-01T00:00:00Z")
     first = run_demo(tmp_path / "var", clock, "op-test-01")
@@ -39,7 +38,6 @@ def test_demo_is_repeatable(tmp_path: Path) -> None:
         f"C0{index}" for index in range(1, 9)
     }
 
-
 def test_demo_does_not_open_sockets(tmp_path: Path, monkeypatch) -> None:
     def deny(*args, **kwargs):
         raise AssertionError("network access is forbidden")
@@ -49,7 +47,6 @@ def test_demo_does_not_open_sockets(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(socket, "getaddrinfo", deny)
     summary = run_demo(tmp_path / "var", FixedClock(), "op-offline-01")
     assert summary["counts"]["snapshots"] == 6
-
 
 def test_one_command_demo_subprocess(tmp_path: Path) -> None:
     env = os.environ.copy()
@@ -71,14 +68,12 @@ def test_one_command_demo_subprocess(tmp_path: Path) -> None:
     assert (tmp_path / "var" / "ledger.db").is_file()
     assert (tmp_path / "var" / "reports" / "demo_summary.md").is_file()
 
-
 def test_cli_duplicate_registration_uses_stable_code(tmp_path: Path, capsys) -> None:
     var_dir = tmp_path / "var"
     path = FIXTURES / "stoplists" / "noise_v1.txt"
     assert main(["--var-dir", str(var_dir), "register", str(path)]) == 0
     assert main(["--var-dir", str(var_dir), "register", str(path)]) == 2
     assert "E_DUP_CONTENT" in capsys.readouterr().err
-
 
 def test_safe_reset_requires_confirmation(tmp_path: Path) -> None:
     root = tmp_path / "var"
@@ -88,7 +83,6 @@ def test_safe_reset_requires_confirmation(tmp_path: Path) -> None:
         safe_reset(root, root, confirmed=False)
     assert caught.value.code == "E_CONFIRM_REQUIRED"
     assert (root / "keep.txt").exists()
-
 
 def test_safe_reset_rejects_outside_path(tmp_path: Path) -> None:
     root = tmp_path / "var"
@@ -103,7 +97,6 @@ def test_safe_reset_rejects_outside_path(tmp_path: Path) -> None:
     with pytest.raises(LedgerError):
         safe_reset(tmp_path, root, confirmed=True)
 
-
 def test_safe_reset_clears_root_and_child(tmp_path: Path) -> None:
     root = tmp_path / "var"
     child = root / "reports"
@@ -115,7 +108,6 @@ def test_safe_reset_clears_root_and_child(tmp_path: Path) -> None:
     safe_reset(root, root, confirmed=True)
     assert root.is_dir()
     assert list(root.iterdir()) == []
-
 
 def test_source_files_stay_under_line_limits() -> None:
     paths = list((ROOT / "stoplist_ledger").rglob("*.py"))
@@ -129,7 +121,6 @@ def test_source_files_stay_under_line_limits() -> None:
     }
     assert too_long == {}
 
-
 def test_runtime_sources_have_no_external_urls() -> None:
     for path in (ROOT / "stoplist_ledger").rglob("*"):
         if path.suffix not in {".py", ".html"}:
@@ -139,10 +130,8 @@ def test_runtime_sources_have_no_external_urls() -> None:
         assert "https://" not in text, path
         assert "cdn." not in text, path
 
-
 def _json_tail(capsys) -> object:
     return json.loads(capsys.readouterr().out)
-
 
 def test_cli_end_to_end(tmp_path: Path, capsys) -> None:
     var = tmp_path / "var"
@@ -172,7 +161,6 @@ def test_cli_end_to_end(tmp_path: Path, capsys) -> None:
     report_path = Path(capsys.readouterr().out.strip())
     assert report_path.is_file()
     assert "Token trace" in report_path.read_text(encoding="utf-8")
-
 
 def test_cli_compile_snapshot_diff_check(tmp_path: Path, capsys) -> None:
     var = tmp_path / "var"
@@ -204,7 +192,6 @@ def test_cli_compile_snapshot_diff_check(tmp_path: Path, capsys) -> None:
     assert check_result["total_issues"] == 9
     assert check_result["status"] == "issues"
 
-
 def test_cli_reset_requires_confirmation_in_default_var(tmp_path, monkeypatch,
                                                        capsys) -> None:
     monkeypatch.chdir(tmp_path)
@@ -217,18 +204,15 @@ def test_cli_reset_requires_confirmation_in_default_var(tmp_path, monkeypatch,
     assert default_var.is_dir()
     assert list(default_var.iterdir()) == []
 
-
 def test_cli_serve_rejects_public_bind(tmp_path, capsys) -> None:
     assert main(["--var-dir", str(tmp_path / "var"), "serve",
                  "--host", "0.0.0.0"]) == 2
     assert "E_NOT_LOCAL" in capsys.readouterr().err
 
-
 def test_cli_report_missing_record(tmp_path, capsys) -> None:
     assert main(["--var-dir", str(tmp_path / "var"), "report",
                  "--kind", "check", "--id", "99"]) == 2
     assert "E_REF_NOT_FOUND" in capsys.readouterr().err
-
 
 def test_scale_and_test_ratio() -> None:
     production = list((ROOT / "stoplist_ledger").glob("*.py"))

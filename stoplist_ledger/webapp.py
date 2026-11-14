@@ -11,14 +11,12 @@ from .util import pretty_json
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
-
 def validate_bind_host(host: str) -> str:
     from .errors import fail
 
     if host not in LOOPBACK_HOSTS:
         fail("E_NOT_LOCAL", "serve may bind only to a loopback host", host=host)
     return host
-
 
 def create_app(store: LedgerStore) -> Flask:
     app = Flask(__name__)

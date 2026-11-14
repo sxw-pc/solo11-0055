@@ -14,14 +14,12 @@ from stoplist_ledger.impact import (
 )
 from stoplist_ledger.report import write_report
 
-
 def _ab(populated, clock):
     a = compile_fixture(populated, clock, "pipeline_a.yaml")
     snaps_a = snapshot_set(populated, clock, a)
     b = compile_fixture(populated, clock, "pipeline_b.yaml")
     snaps_b = snapshot_set(populated, clock, b)
     return a, snaps_a, b, snaps_b
-
 
 def test_impact_matches_golden(populated, clock) -> None:
     a, snaps_a, b, snaps_b = _ab(populated, clock)
@@ -39,7 +37,6 @@ def test_impact_matches_golden(populated, clock) -> None:
     assert payload["text_changes"] == expected["text_changes"]
     assert payload["left"]["compilation"]["name"] == a["name"]
     assert payload["right"]["compilation"]["name"] == b["name"]
-
 
 def test_impact_report_persistence_and_markdown(populated, clock, tmp_path) -> None:
     a, snaps_a, b, snaps_b = _ab(populated, clock)
@@ -63,7 +60,6 @@ def test_impact_report_persistence_and_markdown(populated, clock, tmp_path) -> N
     assert "gray" in markdown
     assert "sample_03" in markdown
 
-
 def test_rule_comparison_is_sorted() -> None:
     left = [
         {"term": "b", "disposition": "drop", "target": None},
@@ -78,18 +74,15 @@ def test_rule_comparison_is_sorted() -> None:
     assert [item["term"] for item in changes["gone_dropped"]] == ["b"]
     assert [item["term"] for item in changes["merge_target_changes"]] == ["a"]
 
-
 def test_impact_requires_snapshots(populated, clock) -> None:
     with pytest.raises(LedgerError) as caught:
         build_impact_payload(populated, [], [], clock.timestamp())
     assert caught.value.code == "E_BAD_FORMAT"
 
-
 def test_impact_missing_snapshot(populated, clock) -> None:
     with pytest.raises(LedgerError) as caught:
         build_impact_payload(populated, [999], [998], clock.timestamp())
     assert caught.value.code == "E_REF_NOT_FOUND"
-
 
 def test_impact_sides_must_use_one_compilation(populated, clock) -> None:
     a, snaps_a, b, snaps_b = _ab(populated, clock)
@@ -101,7 +94,6 @@ def test_impact_sides_must_use_one_compilation(populated, clock) -> None:
             clock.timestamp(),
         )
     assert caught.value.code == "E_BAD_FORMAT"
-
 
 def test_compare_rule_sets_reports_exemptions_both_directions() -> None:
     left = [
@@ -119,7 +111,6 @@ def test_compare_rule_sets_reports_exemptions_both_directions() -> None:
     assert [item["term"] for item in changes["new_dropped"]] == ["alpha"]
     assert [item["term"] for item in changes["gone_dropped"]] == ["beta"]
 
-
 def test_compare_rule_sets_merge_transition() -> None:
     left = [{"term": "x", "disposition": "merge", "target": "one"}]
     right = [{"term": "x", "disposition": "drop", "target": None}]
@@ -129,7 +120,6 @@ def test_compare_rule_sets_merge_transition() -> None:
         "before": {"disposition": "merge", "target": "one"},
         "after": {"disposition": "drop", "target": None},
     }]
-
 
 def test_compare_rule_sets_input_order_does_not_matter() -> None:
     left = [
@@ -141,7 +131,6 @@ def test_compare_rule_sets_input_order_does_not_matter() -> None:
     second = compare_rule_sets(list(reversed(left)), right)
     assert first == second
     assert [item["term"] for item in first["gone_dropped"]] == ["a", "z"]
-
 
 def test_compare_texts_detects_token_changes() -> None:
     from stoplist_ledger.impact import compare_texts
@@ -170,7 +159,6 @@ def test_compare_texts_detects_token_changes() -> None:
     assert diff["changes"][0]["raw"] == "alpha"
     assert diff["changes"][0]["before"]["disposition"] == "drop"
 
-
 def test_impact_audit_event(populated, clock) -> None:
     a, snaps_a, b, snaps_b = _ab(populated, clock)
     create_impact(populated, [item["id"] for item in snaps_a],
@@ -178,7 +166,6 @@ def test_impact_audit_event(populated, clock) -> None:
     assert "impact.create" in [
         event["event"] for event in populated.list_audit()
     ]
-
 
 def test_impact_json_has_no_absolute_source_paths(populated, clock) -> None:
     a, snaps_a, b, snaps_b = _ab(populated, clock)

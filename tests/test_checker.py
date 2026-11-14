@@ -5,7 +5,6 @@ import pytest
 from conftest import FIXTURES
 from stoplist_ledger.checker import check_declaration
 
-
 def test_pipeline_a_is_clean(populated, clock) -> None:
     report = check_declaration(
         populated, FIXTURES / "declarations" / "pipeline_a.yaml", clock
@@ -13,7 +12,6 @@ def test_pipeline_a_is_clean(populated, clock) -> None:
     assert report["status"] == "pass"
     assert report["summary"]["total_issues"] == 0
     assert report["findings"] == []
-
 
 def test_broken_declaration_triggers_all_eight_codes(populated, clock) -> None:
     report = check_declaration(
@@ -36,7 +34,6 @@ def test_broken_declaration_triggers_all_eight_codes(populated, clock) -> None:
     assert ("C07", "empty@v1") in subjects
     assert ("C08", "alpha") in subjects
 
-
 def test_check_report_is_deterministic_and_saved(populated, clock) -> None:
     path = FIXTURES / "declarations" / "broken_conflict.yaml"
     first = check_declaration(populated, path, clock)
@@ -47,7 +44,6 @@ def test_check_report_is_deterministic_and_saved(populated, clock) -> None:
     assert first["generated_at"] == "2024-01-01T00:00:00Z"
     codes = [finding["code"] for finding in first["findings"]]
     assert codes == sorted(codes)
-
 
 def test_check_report_markdown(populated, clock, tmp_path) -> None:
     from stoplist_ledger.report import write_report
@@ -61,17 +57,14 @@ def test_check_report_markdown(populated, clock, tmp_path) -> None:
     assert "C08" in text
     assert "No consistency issues detected." not in text
 
-
 import yaml
 
 from conftest import FIXTURES
-
 
 def _declaration(tmp_path, name, payload):
     path = tmp_path / name
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     return path
-
 
 def test_broken_details_are_actionable(populated, clock) -> None:
     report = check_declaration(
@@ -87,7 +80,6 @@ def test_broken_details_are_actionable(populated, clock) -> None:
     c08 = findings[("C08", "alpha")]
     assert c08["details"]["whitelist"][0]["table_id"] == "whitelist"
     assert c08["severity"] == "warning"
-
 
 def test_case_variants_depend_on_policy(tmp_path, populated, clock) -> None:
     path = _declaration(
@@ -106,7 +98,6 @@ def test_case_variants_depend_on_policy(tmp_path, populated, clock) -> None:
     )
     report = check_declaration(populated, path, clock)
     assert "C04" not in {finding["code"] for finding in report["findings"]}
-
 
 def test_missing_targets_can_be_allowed(tmp_path, populated, clock) -> None:
     path = _declaration(
@@ -128,7 +119,6 @@ def test_missing_targets_can_be_allowed(tmp_path, populated, clock) -> None:
     assert "C03" not in codes
     assert "C02" in codes
 
-
 def test_scoped_out_missing_version_is_ignored(tmp_path, populated, clock) -> None:
     path = _declaration(
         tmp_path,
@@ -146,7 +136,6 @@ def test_scoped_out_missing_version_is_ignored(tmp_path, populated, clock) -> No
     report = check_declaration(populated, path, clock)
     assert "C05" not in {finding["code"] for finding in report["findings"]}
 
-
 def test_missing_version_is_error_severity(tmp_path, populated, clock) -> None:
     path = _declaration(
         tmp_path,
@@ -163,7 +152,6 @@ def test_missing_version_is_error_severity(tmp_path, populated, clock) -> None:
     assert finding["severity"] == "error"
     assert finding["details"] == {"table_id": "zh_stop", "version": 999}
 
-
 def test_pipeline_b_check_is_clean(populated, clock) -> None:
     report = check_declaration(
         populated, FIXTURES / "declarations" / "pipeline_b.yaml", clock
@@ -171,12 +159,10 @@ def test_pipeline_b_check_is_clean(populated, clock) -> None:
     assert report["status"] == "pass"
     assert report["summary"]["total_issues"] == 0
 
-
 def test_check_audit_event(populated, clock) -> None:
     check_declaration(populated, FIXTURES / "declarations" / "pipeline_a.yaml",
                       clock)
     assert "check.run" in [event["event"] for event in populated.list_audit()]
-
 
 def test_check_unknown_declaration_raises(store, clock, tmp_path) -> None:
     from stoplist_ledger.errors import LedgerError

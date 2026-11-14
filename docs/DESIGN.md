@@ -130,6 +130,22 @@ tree. If absent, it gets `keep` and a synthetic `default:keep` source. A merge
 token records its target; a whitelist token records `whitelist_exempt`.
 Overridden proposal metadata is copied into the token trace.
 
+Term lookup is served by a process-local `RuleIndex` rather than a dict rebuilt
+per snapshot. It holds a direct `term -> rule` table plus candidate buckets
+keyed by normalized term length (a prefix candidate set). The direct table uses
+the same last-wins assignment as the linear `{rule["term"]: rule}` build, so
+disposition, target, source and `overridden_by` are identical. The index is
+cached under the compilation's `rules_hash`; switching pipelines or rolling back
+to older rules therefore yields a distinct cache entry instead of a stale index.
+When a compilation dict lacks that hash, an equivalent content hash of scope,
+policy and rules is used. Cache entries are bounded by an LRU size limit and
+never enter SQLite or any serialized artifact.
+
+For texts above 64 tokens the snapshot also carries `lookup_stats`: lookup,
+hit and miss counts, index reuse, index term/bucket counts and candidate-bucket
+sizes. It is operational only, uses no clock, and is excluded from
+`result_hash`, so repeated snapshots and reports stay byte-stable.
+
 The semantic result contains text id/hash, compilation name/rules hash/scope,
 normalization policy, token rows and disposition counts. `result_hash` is
 SHA-256 over that semantic object. Database ids and timestamps are outside the

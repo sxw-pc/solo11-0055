@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from .clock import FixedClock
 from .errors import fail
 from .normalizer import NormalizationPolicy
+from .rule_index import LOOKUP_STATS_TOKEN_THRESHOLD, get_rule_index
 from .store import LedgerStore
 from .util import display_path, file_sha256, read_text, stable_hash
 
@@ -19,7 +20,6 @@ DEFAULT_SOURCE = {
     "line": 0,
     "rule": "default:keep",
 }
-
 
 def tokenize(text: str) -> list[dict[str, Any]]:
     """Split on whitespace and Unicode punctuation while keeping raw offsets."""
@@ -40,7 +40,6 @@ def tokenize(text: str) -> list[dict[str, Any]]:
         tokens.append({"raw": text[start:], "start": start, "end": len(text)})
     return tokens
 
-
 def _decision(rule: dict[str, Any] | None, raw: str) -> dict[str, Any]:
     if rule is None:
         return {
@@ -55,7 +54,6 @@ def _decision(rule: dict[str, Any] | None, raw: str) -> dict[str, Any]:
         "source": rule["source"],
         "overridden_by": rule.get("overridden_by", []),
     }
-
 
 def build_snapshot(compilation: dict[str, Any], text_path: Path,
                    scope: str | None = None) -> dict[str, Any]:
@@ -72,16 +70,25 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         )
     text = read_text(text_path)
     policy = NormalizationPolicy.from_mapping(compilation["normalization"])
-    rules = {rule["term"]: rule for rule in compilation["rules"]}
+    index, reused = get_rule_index(compilation)
+    tokens = tokenize(text)
+    collect_stats = len(tokens) > LOOKUP_STATS_TOKEN_THRESHOLD
     token_rows: list[dict[str, Any]] = []
     counts = {"keep": 0, "drop": 0, "merge": 0, "whitelist_exempt": 0}
-    for index, token in enumerate(tokenize(text)):
+    hits = 0
+    bucket_sizes: list[int] = []
+    for position, token in enumerate(tokens):
         term = policy.normalize_validated(token["raw"])
-        decision = _decision(rules.get(term), token["raw"])
+        rule = index.lookup(term)
+        if rule is not None:
+            hits += 1
+        if collect_stats:
+            bucket_sizes.append(index.bucket_size(term))
+        decision = _decision(rule, token["raw"])
         counts[decision["disposition"]] += 1
         token_rows.append(
             {
-                "index": index,
+                "index": position,
                 "raw": token["raw"],
                 "start": token["start"],
                 "end": token["end"],
@@ -113,8 +120,20 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         "tokens": token_rows,
         "summary": summary,
     }
-    return semantic | {"result_hash": stable_hash(semantic)}
-
+    result = semantic | {"result_hash": stable_hash(semantic)}
+    if collect_stats:
+        result["lookup_stats"] = {
+            "token_count": len(tokens),
+            "lookups": len(tokens),
+            "hits": hits,
+            "misses": len(tokens) - hits,
+            "index_reused": reused,
+            "index_term_count": index.term_count,
+            "index_bucket_count": index.bucket_count,
+            "candidate_bucket_max": max(bucket_sizes, default=0),
+            "candidate_bucket_total": sum(bucket_sizes),
+        }
+    return result
 
 def snapshot_text(
     store: LedgerStore,
@@ -148,7 +167,6 @@ def snapshot_text(
         clock.timestamp(),
     )
     return saved
-
 
 def snapshot_many(
     store: LedgerStore,

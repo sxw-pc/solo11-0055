@@ -22,7 +22,6 @@ ERROR_CODES: dict[str, str] = {
     "E_IO": "A local file operation failed",
 }
 
-
 class LedgerError(Exception):
     """An expected, user-facing failure with a stable machine code."""
 
@@ -45,7 +44,6 @@ class LedgerError(Exception):
             "message": self.message,
             "details": self.details,
         }
-
 
 def fail(code: str, message: str, **details: Any) -> None:
     """Raise a LedgerError; kept as a function for compact validation branches."""

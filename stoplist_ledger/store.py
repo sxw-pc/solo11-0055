@@ -63,7 +63,6 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 """
 
-
 class LedgerStore(RecordMixin):
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)

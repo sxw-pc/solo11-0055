@@ -14,7 +14,6 @@ WHITESPACE_POLICIES = ("trim", "collapse")
 MAX_TERM_LENGTH = 256
 _WS = re.compile(r"\s+", flags=re.UNICODE)
 
-
 @dataclass(frozen=True)
 class NormalizationPolicy:
     case: str = "nfkc_lower"
@@ -95,7 +94,6 @@ class NormalizationPolicy:
             self.normalize_validated(source),
             self.normalize_validated(target),
         )
-
 
 def assert_idempotent(policy: NormalizationPolicy, term: str) -> str:
     once = policy.normalize_validated(term)

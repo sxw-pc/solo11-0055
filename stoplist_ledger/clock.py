@@ -14,7 +14,6 @@ from .errors import fail
 
 DEFAULT_NOW = "2024-01-01T00:00:00Z"
 
-
 def validate_timestamp(value: str) -> str:
     if not isinstance(value, str) or not value:
         fail("E_BAD_FORMAT", "clock value must be a non-empty ISO-8601 string")
@@ -25,7 +24,6 @@ def validate_timestamp(value: str) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return value
-
 
 @dataclass(frozen=True)
 class FixedClock:
@@ -38,7 +36,6 @@ class FixedClock:
 
     def timestamp(self) -> str:
         return self.now
-
 
 def make_clock(value: str | None = None) -> FixedClock:
     return FixedClock(validate_timestamp(value or DEFAULT_NOW))

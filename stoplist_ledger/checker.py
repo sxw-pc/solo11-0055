@@ -26,7 +26,6 @@ CHECK_NAMES = {
 }
 _WS = re.compile(r"\s+")
 
-
 def _finding(code: str, subject: str, message: str, details: dict[str, Any],
              severity: str = "warning") -> dict[str, Any]:
     return {
@@ -38,16 +37,13 @@ def _finding(code: str, subject: str, message: str, details: dict[str, Any],
         "details": details,
     }
 
-
 def _canonical_variant(term: str) -> str:
     return _WS.sub(" ", unicodedata.normalize("NFKC", term).casefold()).strip()
-
 
 def _cycle_signature(cycle: list[str]) -> tuple[str, ...]:
     pivot = min(range(len(cycle)), key=lambda index: cycle[index])
     rotated = cycle[pivot:] + cycle[:pivot]
     return tuple(rotated)
-
 
 def _find_cycles(graph: dict[str, str]) -> list[list[str]]:
     cycles: set[tuple[str, ...]] = set()
@@ -65,7 +61,6 @@ def _find_cycles(graph: dict[str, str]) -> list[list[str]]:
             current = graph[current]
     return [list(cycle) for cycle in sorted(cycles)]
 
-
 def _active_versions(
     store: LedgerStore, declaration: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -81,7 +76,6 @@ def _active_versions(
         else:
             versions.append(version)
     return versions, missing
-
 
 def run_checks(declaration: dict[str, Any],
                versions: list[dict[str, Any]],
@@ -231,7 +225,6 @@ def run_checks(declaration: dict[str, Any],
         key=lambda finding: (finding["code"], finding["subject"],
                              canonical_json(finding["details"])),
     )
-
 
 def check_declaration(
     store: LedgerStore,

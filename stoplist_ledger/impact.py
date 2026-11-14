@@ -11,12 +11,10 @@ from .util import stable_hash
 
 KEEP = {"disposition": "keep", "target": None}
 
-
 def _outcome(rule: dict[str, Any] | None) -> dict[str, Any]:
     if rule is None:
         return dict(KEEP)
     return {"disposition": rule["disposition"], "target": rule["target"]}
-
 
 def compare_rule_sets(
     left_rules: list[dict[str, Any]],
@@ -50,10 +48,8 @@ def compare_rule_sets(
         "exemption_changes": exemption_changes,
     }
 
-
 def _token_outcome(token: dict[str, Any]) -> dict[str, Any]:
     return {"disposition": token["disposition"], "target": token["target"]}
-
 
 def compare_texts(
     left: dict[str, Any], right: dict[str, Any]
@@ -96,13 +92,11 @@ def compare_texts(
         "changes": changes,
     }
 
-
 def _snapshot_map(records: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     mapping: dict[str, dict[str, Any]] = {}
     for record in sorted(records, key=lambda item: (item["text_id"], item["id"])):
         mapping.setdefault(record["text_id"], record)
     return mapping
-
 
 def _side(store: LedgerStore, snapshot_ids: list[int]) -> tuple[
     dict[str, Any], list[dict[str, Any]]
@@ -125,7 +119,6 @@ def _side(store: LedgerStore, snapshot_ids: list[int]) -> tuple[
         fail("E_REF_NOT_FOUND", "snapshot compilation is missing",
              compilation_id=compilation_id)
     return compilation, records
-
 
 def build_impact_payload(
     store: LedgerStore,
@@ -164,7 +157,6 @@ def build_impact_payload(
     payload["report_hash"] = stable_hash(payload)
     return payload
 
-
 def _side_meta(compilation: dict[str, Any],
                records: list[dict[str, Any]]) -> dict[str, Any]:
     return {
@@ -182,7 +174,6 @@ def _side_meta(compilation: dict[str, Any],
             for record in records
         ],
     }
-
 
 def create_impact(
     store: LedgerStore,

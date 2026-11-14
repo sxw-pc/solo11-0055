@@ -21,7 +21,6 @@ from .util import pretty_json
 
 DEFAULT_VAR = Path("var")
 
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m stoplist_ledger",
@@ -87,18 +86,15 @@ def build_parser() -> argparse.ArgumentParser:
     reset.add_argument("--path", type=Path)
     return parser
 
-
 def _report_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--format", choices=["json", "md"], default="json")
     parser.add_argument("--out", type=Path)
-
 
 def _context(args: argparse.Namespace) -> tuple[LedgerStore, FixedClock, Path]:
     clock = make_clock(args.now)
     var_dir = Path(args.var_dir)
     store = LedgerStore(var_dir / "ledger.db").initialize()
     return store, clock, var_dir
-
 
 def _emit_report(record: dict[str, Any], args: argparse.Namespace,
                  identifier: str, var_dir: Path) -> Path:
@@ -107,7 +103,6 @@ def _emit_report(record: dict[str, Any], args: argparse.Namespace,
     )
     write_report(record, args.format, out)
     return out
-
 
 def _resolve_compilation(store: LedgerStore, value: str) -> dict[str, Any]:
     record = None
@@ -118,7 +113,6 @@ def _resolve_compilation(store: LedgerStore, value: str) -> dict[str, Any]:
     if record is None:
         fail("E_REF_NOT_FOUND", "compilation does not exist", compilation=value)
     return record
-
 
 def _snapshot_ids(store: LedgerStore, explicit: list[int] | None,
                   compilation_id: int | None) -> list[int]:
@@ -131,7 +125,6 @@ def _snapshot_ids(store: LedgerStore, explicit: list[int] | None,
         fail("E_REF_NOT_FOUND", "compilation has no snapshots",
              compilation_id=compilation_id)
     return [record["id"] for record in records]
-
 
 def dispatch(args: argparse.Namespace) -> int:
     if args.command == "reset":
@@ -239,7 +232,6 @@ def dispatch(args: argparse.Namespace) -> int:
         return 0
     fail("E_BAD_FORMAT", "unknown command", command=args.command)
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -250,7 +242,6 @@ def main(argv: list[str] | None = None) -> int:
         if exc.details:
             print(pretty_json(exc.details), end="", file=sys.stderr)
         return 2
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

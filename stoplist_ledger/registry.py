@@ -20,7 +20,6 @@ KINDS = ("stoplist", "synonym", "noise", "whitelist")
 _ID_RE = re.compile(r"^(?P<table>[A-Za-z0-9][A-Za-z0-9_-]*)_v(?P<version>[1-9]\d*)$")
 _TABLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
-
 @dataclass(frozen=True)
 class ParsedTable:
     kind: str
@@ -28,7 +27,6 @@ class ParsedTable:
     line_count: int
     comment_count: int
     term_count: int
-
 
 def infer_kind(path: Path, explicit: str | None = None) -> str:
     suffix = path.suffix.lower()
@@ -54,7 +52,6 @@ def infer_kind(path: Path, explicit: str | None = None) -> str:
         fail("E_BAD_FORMAT", "YAML tables are reserved for synonym mappings", path=path.name)
     return kind
 
-
 def parse_table(path: Path, kind: str,
                 policy: NormalizationPolicy) -> ParsedTable:
     text = read_text(path)
@@ -73,7 +70,6 @@ def parse_table(path: Path, kind: str,
         term_count=len(terms),
     )
 
-
 def _parse_txt_terms(lines: list[str],
                      policy: NormalizationPolicy) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
@@ -84,7 +80,6 @@ def _parse_txt_terms(lines: list[str],
         term = policy.normalize_validated(raw)
         entries.append({"line": line_no, "raw": raw, "term": term})
     return entries
-
 
 def _parse_synonym_yaml(text: str, policy: NormalizationPolicy,
                         path: Path) -> list[dict[str, Any]]:
@@ -118,7 +113,6 @@ def _parse_synonym_yaml(text: str, policy: NormalizationPolicy,
         )
     return entries
 
-
 def _signatures(entries: list[dict[str, Any]]) -> list[str]:
     result = []
     for entry in entries:
@@ -127,7 +121,6 @@ def _signatures(entries: list[dict[str, Any]]) -> list[str]:
         else:
             result.append(entry["raw"])
     return result
-
 
 def diff_entries(previous: list[dict[str, Any]] | None,
                  current: list[dict[str, Any]]) -> dict[str, Any]:
@@ -172,7 +165,6 @@ def diff_entries(previous: list[dict[str, Any]] | None,
         "modified_count": len(modified),
     }
 
-
 def _content_hash(kind: str, entries: list[dict[str, Any]]) -> str:
     if kind == "synonym":
         payload = {
@@ -182,7 +174,6 @@ def _content_hash(kind: str, entries: list[dict[str, Any]]) -> str:
     else:
         payload = {"kind": kind, "terms": [entry["term"] for entry in entries]}
     return stable_hash(payload)
-
 
 def infer_identity(path: Path, table_id: str | None,
                    version: int | None) -> tuple[str, int | None]:
@@ -199,7 +190,6 @@ def infer_identity(path: Path, table_id: str | None,
     if version is not None and (not isinstance(version, int) or version < 1):
         fail("E_BAD_FORMAT", "version must be a positive integer", version=version)
     return resolved_table, version if version is not None else inferred_version
-
 
 def register_file(
     store: LedgerStore,

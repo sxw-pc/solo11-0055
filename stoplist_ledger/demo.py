@@ -20,7 +20,6 @@ from .util import PROJECT_ROOT, display_path, pretty_json
 FIXTURES = PROJECT_ROOT / "fixtures"
 REPORT_KINDS = ("json", "md")
 
-
 def safe_reset(target: Path, var_root: Path, confirmed: bool = False) -> Path:
     """Remove the var tree (or one child), refusing anything outside var_root."""
 
@@ -49,7 +48,6 @@ def safe_reset(target: Path, var_root: Path, confirmed: bool = False) -> Path:
         resolved_target.unlink()
     return resolved_target
 
-
 def register_fixtures(store: LedgerStore, clock: FixedClock,
                       operator: str) -> list[dict[str, Any]]:
     paths = sorted(
@@ -65,7 +63,6 @@ def register_fixtures(store: LedgerStore, clock: FixedClock,
         )
     return registered
 
-
 def _report(payload: dict[str, Any], report_dir: Path, kind: str,
             identifier: str, formats: tuple[str, ...] = ("json", "md")) -> list[str]:
     artifacts = []
@@ -74,7 +71,6 @@ def _report(payload: dict[str, Any], report_dir: Path, kind: str,
         write_report(payload, fmt, path)
         artifacts.append(display_path(path))
     return artifacts
-
 
 def run_demo(var_dir: Path, clock: FixedClock,
              operator: str = "op-demo-01") -> dict[str, Any]:
@@ -157,7 +153,6 @@ def run_demo(var_dir: Path, clock: FixedClock,
                      default_report_path(report_dir, "demo", "summary", fmt))
     return summary
 
-
 def _snap_meta(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": snapshot["id"],
@@ -165,7 +160,6 @@ def _snap_meta(snapshot: dict[str, Any]) -> dict[str, Any]:
         "result_hash": snapshot["result_hash"],
         "summary": snapshot["summary"],
     }
-
 
 def demo_main(var_dir: Path, clock: FixedClock,
               operator: str = "op-demo-01") -> int:

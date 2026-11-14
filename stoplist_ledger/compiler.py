@@ -15,7 +15,6 @@ from .util import display_path, read_text, stable_hash
 
 DISPOSITIONS = ("drop", "merge", "whitelist_exempt")
 
-
 def load_declaration(path: Path) -> dict[str, Any]:
     """Load and type-check a declaration without resolving any table."""
 
@@ -84,12 +83,10 @@ def load_declaration(path: Path) -> dict[str, Any]:
     declaration["declaration_hash"] = stable_hash(declaration | {"policy": None})
     return declaration
 
-
 def table_in_scope(scope: str, scopes: list[str]) -> bool:
     if scope in {"*", "all"}:
         return True
     return any(item in {"*", "all", scope} for item in scopes)
-
 
 def _proposal(source: dict[str, Any], disposition: str,
               target: str | None = None) -> dict[str, Any]:
@@ -99,7 +96,6 @@ def _proposal(source: dict[str, Any], disposition: str,
         "source": source | {"rule": f"{source['kind']}:{disposition}"},
     }
 
-
 def _source(table: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
     return {
         "table_id": table["table_id"],
@@ -108,7 +104,6 @@ def _source(table: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
         "line": entry["line"],
         "raw": entry["raw"],
     }
-
 
 def build_rules(
     declaration: dict[str, Any],
@@ -196,7 +191,6 @@ def build_rules(
         counts[rule["disposition"]] += 1
     return rules, counts, table_trace
 
-
 def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, Any]:
     declaration = load_declaration(declaration_path)
     scope = declaration["scope"]
@@ -243,7 +237,6 @@ def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, A
         "disposition_counts": counts,
         "rules_hash": rules_hash,
     }
-
 
 def compile_declaration(
     store: LedgerStore,

@@ -8,7 +8,6 @@ from typing import Any
 
 from .util import canonical_json
 
-
 class RecordMixin:
     """Methods that assume the host class provides _connect and _decode."""
 
