@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from .clock import FixedClock
 from .errors import fail
 from .normalizer import NormalizationPolicy
+from .patterns import EXACT, PATTERN_KINDS, RANK, build_index, find_matches
 from .store import LedgerStore
 from .util import display_path, file_sha256, read_text, stable_hash
 
@@ -18,6 +19,14 @@ DEFAULT_SOURCE = {
     "kind": "default",
     "line": 0,
     "rule": "default:keep",
+}
+
+# Reason text for candidates that lose the per-token arbitration.
+LOSER_REASONS = {
+    "exact_wins": "lower specificity than the winning exact rule",
+    "specificity": "lower pattern specificity than the winning rule",
+    "priority": "lower declared priority than the winning rule",
+    "pattern_order": "later pattern term order than the winning rule",
 }
 
 
@@ -41,20 +50,73 @@ def tokenize(text: str) -> list[dict[str, Any]]:
     return tokens
 
 
-def _decision(rule: dict[str, Any] | None, raw: str) -> dict[str, Any]:
+def _arbitrate(
+    candidates: list[dict[str, Any]], priority_rank: dict[str, int]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Pick the unique winning rule for one token.
+
+    Specificity sequence (high to low): exact, prefix, suffix, substring.
+    Ties fall back to the declaration priority of the rule's source table and
+    then to the ascending pattern term, so the result never depends on dict or
+    insertion order.
+    """
+
+    def sort_key(rule: dict[str, Any]) -> tuple[Any, ...]:
+        kind = rule.get("pattern_kind", EXACT)
+        return (
+            RANK[kind],
+            priority_rank.get(rule["source"]["table_id"], len(priority_rank)),
+            rule["term"],
+        )
+
+    ordered = sorted(candidates, key=sort_key)
+    winner, winner_key = ordered[0], sort_key(ordered[0])
+    losers: list[dict[str, Any]] = []
+    for rule in ordered[1:]:
+        key = sort_key(rule)
+        if RANK[rule.get("pattern_kind", EXACT)] != winner_key[0]:
+            reason = (LOSER_REASONS["exact_wins"]
+                      if winner.get("pattern_kind", EXACT) == EXACT
+                      else LOSER_REASONS["specificity"])
+        elif key[1] != winner_key[1]:
+            reason = LOSER_REASONS["priority"]
+        else:
+            reason = LOSER_REASONS["pattern_order"]
+        losers.append({
+            "disposition": rule["disposition"], "target": rule["target"],
+            "source": rule["source"], "reason": reason,
+            "match_type": rule.get("pattern_kind", EXACT),
+            "term": rule["term"],
+        })
+    return winner, losers
+
+
+def _decision(rule: dict[str, Any] | None, raw: str,
+              match_type: str = EXACT,
+              runtime_losers: list[dict[str, Any]] | None = None,
+              include_pattern_trace: bool = False) -> dict[str, Any]:
     if rule is None:
-        return {
+        decision = {
             "disposition": "keep",
             "target": None,
             "source": DEFAULT_SOURCE | {"raw": raw},
             "overridden_by": [],
         }
-    return {
+        if include_pattern_trace:
+            decision["match_type"] = match_type
+        return decision
+    overridden_by = list(rule.get("overridden_by", []))
+    if runtime_losers:
+        overridden_by = overridden_by + runtime_losers
+    decision = {
         "disposition": rule["disposition"],
         "target": rule["target"],
         "source": rule["source"],
-        "overridden_by": rule.get("overridden_by", []),
+        "overridden_by": overridden_by,
     }
+    if include_pattern_trace:
+        decision["match_type"] = match_type
+    return decision
 
 
 def build_snapshot(compilation: dict[str, Any], text_path: Path,
@@ -72,26 +134,54 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         )
     text = read_text(text_path)
     policy = NormalizationPolicy.from_mapping(compilation["normalization"])
-    rules = {rule["term"]: rule for rule in compilation["rules"]}
+    all_rules = compilation["rules"]
+    exact_rules = {
+        rule["term"]: rule for rule in all_rules
+        if rule.get("pattern_kind", EXACT) == EXACT
+    }
+    stored_index = compilation.get("pattern_index")
+    pattern_index = (
+        {kind: list(stored_index.get(kind, [])) for kind in PATTERN_KINDS}
+        if stored_index is not None else build_index(all_rules)
+    )
+    has_patterns = any(pattern_index[kind] for kind in PATTERN_KINDS)
+    priority_rank = {
+        table_id: index
+        for index, table_id in enumerate(compilation["priority"])
+    }
     token_rows: list[dict[str, Any]] = []
     counts = {"keep": 0, "drop": 0, "merge": 0, "whitelist_exempt": 0}
     for index, token in enumerate(tokenize(text)):
         term = policy.normalize_validated(token["raw"])
-        decision = _decision(rules.get(term), token["raw"])
+        candidates = find_matches(term, exact_rules, pattern_index)
+        if not candidates:
+            decision = _decision(
+                None, token["raw"],
+                include_pattern_trace=has_patterns,
+            )
+        else:
+            winner, runtime_losers = _arbitrate(candidates, priority_rank)
+            match_type = winner.get("pattern_kind", EXACT)
+            decision = _decision(
+                winner, token["raw"], match_type=match_type,
+                runtime_losers=runtime_losers if has_patterns else None,
+                include_pattern_trace=has_patterns,
+            )
         counts[decision["disposition"]] += 1
-        token_rows.append(
-            {
-                "index": index,
-                "raw": token["raw"],
-                "start": token["start"],
-                "end": token["end"],
-                "term": term,
-                "disposition": decision["disposition"],
-                "target": decision["target"],
-                "source": decision["source"],
-                "overridden_by": decision["overridden_by"],
-            }
-        )
+        row = {
+            "index": index,
+            "raw": token["raw"],
+            "start": token["start"],
+            "end": token["end"],
+            "term": term,
+            "disposition": decision["disposition"],
+            "target": decision["target"],
+            "source": decision["source"],
+            "overridden_by": decision["overridden_by"],
+        }
+        if "match_type" in decision:
+            row["match_type"] = decision["match_type"]
+        token_rows.append(row)
     summary = {
         "token_count": len(token_rows),
         **counts,

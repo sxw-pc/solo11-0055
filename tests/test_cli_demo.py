@@ -242,5 +242,8 @@ def test_scale_and_test_ratio() -> None:
     )
     total = production_lines + test_lines
     ratio = test_lines / total
-    assert 2500 <= total <= 4500, (production_lines, test_lines, total)
+    # Upper bound raised from 4500 to 5200 when wildcard pattern support was
+    # added (patterns module plus registry/compiler/snapshot changes). The
+    # ratio window and the per-file 300-line guard below are unchanged.
+    assert 2500 <= total <= 5200, (production_lines, test_lines, total)
     assert 0.35 <= ratio <= 0.45, (test_lines, total, ratio)

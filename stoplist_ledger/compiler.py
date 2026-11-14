@@ -10,6 +10,7 @@ import yaml
 from .clock import FixedClock
 from .errors import fail
 from .normalizer import NormalizationPolicy
+from .patterns import EXACT, PATTERN_KINDS, build_index, classify
 from .store import LedgerStore
 from .util import display_path, read_text, stable_hash
 
@@ -113,7 +114,8 @@ def _source(table: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
 def build_rules(
     declaration: dict[str, Any],
     versions: dict[str, dict[str, Any]],
-) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]],
+           dict[str, list[dict[str, Any]]]]:
     """Resolve proposals by declared priority; first proposal wins."""
 
     policy: NormalizationPolicy = declaration["policy"]
@@ -160,6 +162,14 @@ def build_rules(
             else:
                 target = policy.normalize_validated(entry["target_raw"])
                 candidate = _proposal(source, "merge", target)
+            # Pattern metadata is registered by the registry for term-list
+            # tables; synonym YAML entries are always exact.
+            shape = classify(term) if table["kind"] != "synonym" else {
+                "pattern_kind": EXACT, "needle": None
+            }
+            if shape["pattern_kind"] != EXACT:
+                candidate["pattern_kind"] = shape["pattern_kind"]
+                candidate["needle"] = shape["needle"]
             if term not in proposals:
                 proposals[term] = candidate | {"term": term, "overridden_by": []}
                 continue
@@ -167,14 +177,18 @@ def build_rules(
             if (current["disposition"], current["target"]) != (
                 candidate["disposition"], candidate["target"]
             ):
-                current["overridden_by"].append(
-                    {
-                        "disposition": candidate["disposition"],
-                        "target": candidate["target"],
-                        "source": candidate["source"],
-                        "reason": "lower priority than winning proposal",
-                    }
-                )
+                loser = {
+                    "disposition": candidate["disposition"],
+                    "target": candidate["target"],
+                    "source": candidate["source"],
+                    "reason": "lower priority than winning proposal",
+                }
+                # Pattern losers carry their term and match type so snapshot
+                # arbitration can render a complete, typed override chain.
+                if "pattern_kind" in candidate:
+                    loser["term"] = term
+                    loser["match_type"] = candidate["pattern_kind"]
+                current["overridden_by"].append(loser)
             else:
                 current.setdefault("supporting_sources", []).append(candidate["source"])
 
@@ -194,7 +208,8 @@ def build_rules(
     counts = {name: 0 for name in DISPOSITIONS}
     for rule in rules:
         counts[rule["disposition"]] += 1
-    return rules, counts, table_trace
+    pattern_index = build_index(rules)
+    return rules, counts, table_trace, pattern_index
 
 
 def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, Any]:
@@ -213,7 +228,9 @@ def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, A
                 version=ref["version"],
             )
         versions[ref["id"]] = version
-    rules, counts, table_trace = build_rules(declaration, versions)
+    rules, counts, table_trace, pattern_index = build_rules(
+        declaration, versions
+    )
     rules_hash = stable_hash(
         {
             "scope": scope,
@@ -227,7 +244,7 @@ def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, A
             "rules": rules,
         }
     )
-    return {
+    payload = {
         "kind": "compilation",
         "schema_version": 1,
         "name": declaration["name"],
@@ -243,6 +260,11 @@ def build_compilation(store: LedgerStore, declaration_path: Path) -> dict[str, A
         "disposition_counts": counts,
         "rules_hash": rules_hash,
     }
+    if any(pattern_index[kind] for kind in PATTERN_KINDS):
+        # Deterministic, searchable pattern buckets; omitted entirely for pure
+        # exact compilations so historical rules_hash values stay untouched.
+        payload["pattern_index"] = pattern_index
+    return payload
 
 
 def compile_declaration(

@@ -121,6 +121,7 @@ are generic function-word examples rather than corpus excerpts.
 | `E_EMPTY_TERM` | Term or synonym target is empty after normalization |
 | `E_CTRL_CHAR` | Term contains a control or format character |
 | `E_TERM_TOO_LONG` | Normalized term exceeds 256 characters |
+| `E_BAD_PATTERN` | Wildcard pattern is malformed; only `pre*`, `*suf` and `*mid*` are accepted |
 | `E_BAD_FORMAT` | File, declaration or argument shape violates its contract |
 | `E_BAD_POLICY` | Unknown or malformed normalization policy |
 | `E_DUP_CONTENT` | Identical normalized content is already registered |

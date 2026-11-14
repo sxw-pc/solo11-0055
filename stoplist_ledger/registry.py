@@ -13,6 +13,7 @@ import yaml
 from .clock import FixedClock
 from .errors import fail
 from .normalizer import NormalizationPolicy
+from .patterns import EXACT, classify
 from .store import LedgerStore
 from .util import display_path, read_text, stable_hash
 
@@ -82,7 +83,12 @@ def _parse_txt_terms(lines: list[str],
         if not raw or raw.startswith("#"):
             continue
         term = policy.normalize_validated(raw)
-        entries.append({"line": line_no, "raw": raw, "term": term})
+        shape = classify(term, raw=raw, line=line_no)
+        entry = {"line": line_no, "raw": raw, "term": term}
+        if shape["pattern_kind"] != EXACT:
+            entry["pattern_kind"] = shape["pattern_kind"]
+            entry["needle"] = shape["needle"]
+        entries.append(entry)
     return entries
 
 
@@ -179,8 +185,21 @@ def _content_hash(kind: str, entries: list[dict[str, Any]]) -> str:
             "kind": kind,
             "map": sorted([entry["term"], entry["target"]] for entry in entries),
         }
+        return stable_hash(payload)
+    has_patterns = any("pattern_kind" in entry for entry in entries)
+    if has_patterns:
+        # Order-independent canonical entries so reordering exact and pattern
+        # lines cannot confuse the content hash.
+        canonical = [
+            {"term": e["term"], "pattern_kind": e.get("pattern_kind", EXACT),
+             "needle": e.get("needle")}
+            for e in entries
+        ]
+        payload = {"kind": kind,
+                   "entries": sorted(canonical, key=lambda item: item["term"])}
     else:
-        payload = {"kind": kind, "terms": [entry["term"] for entry in entries]}
+        # Pure exact tables keep the historical, file-order-sensitive payload.
+        payload = {"kind": kind, "terms": [e["term"] for e in entries]}
     return stable_hash(payload)
 
 

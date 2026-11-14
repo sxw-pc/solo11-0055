@@ -35,13 +35,34 @@ Per-term limits after normalization:
 - no Unicode `Cc` or `Cf` characters (`E_CTRL_CHAR`);
 - at most 256 characters (`E_TERM_TOO_LONG`).
 
+### 2.1 Wildcard pattern entries
+
+A `.txt` entry whose normalized term carries `*` is a pattern instead of an
+exact term. The wildcard is accepted only in these three shapes:
+
+| Shape | Meaning | `pattern_kind` | `needle` |
+| --- | --- | --- | --- |
+| `pre*` | prefix match | `prefix` | `pre` |
+| `*suf` | suffix match | `suffix` | `suf` |
+| `*mid*` | substring match | `substring` | `mid` |
+
+A bare `*`, more than two wildcards, or a wildcard anywhere other than the
+leading/trailing edge fails registration with `E_BAD_PATTERN`. A star inside a
+synonym YAML key is a literal exact term, never a pattern. Pattern entries keep
+the same `line`/`raw` provenance as exact entries and additionally carry
+`pattern_kind` and `needle`. The `content_hash` of any table containing a
+pattern is computed from order-independent canonical entries, so reordering
+exact and pattern lines cannot change it; pure exact tables keep their
+historical file-order-sensitive hash.
+
 Example:
 
 ```text
 # synthetic stoplist
 的
 alpha
-beta
+pre*
+*suf
 ```
 
 Table kinds: `stoplist`, `noise`, `whitelist`; these all use term-list files.
@@ -177,6 +198,12 @@ Rules are sorted by `term`. `overridden_by` preserves priority order; each entry
 contains the losing `disposition`, `target`, `source` and a reason. Equal losers
 appear under `supporting_sources`.
 
+Pattern rules carry `pattern_kind` (`prefix`/`suffix`/`substring`) and the
+wildcard-free `needle`. When at least one pattern rule exists, the compilation
+also carries a deterministic `pattern_index` with three searchable buckets
+(`prefix`, `suffix`, `substring`), each sorted by rule `term`. Pure exact
+compilations omit `pattern_index`, so their `rules_hash` is unchanged.
+
 ## 8. Snapshot JSON
 
 ```json
@@ -204,6 +231,15 @@ appear under `supporting_sources`.
 `start`/`end` are Python code-point indexes into the original text. Punctuation
 and whitespace are separators, not tokens. `_` is retained inside words.
 `keep` tokens use source kind `default` and rule `default:keep`.
+
+When the compilation contains pattern rules, every token trace carries a
+`match_type` of `exact`, `prefix`, `suffix` or `substring`, naming the rule that
+won. When several rules match one token the winner is chosen by the specificity
+sequence exact > prefix > suffix > substring; ties fall back to the declared
+table priority and then to ascending pattern `term`, so the result never depends
+on insertion order. Losing candidates are appended to `overridden_by` (after any
+compile-time overrides) with a per-rule reason. Pure exact snapshots omit
+`match_type` entirely.
 
 `result_hash` covers text id/hash, compilation identity, scope, policy, tokens
 and summary. It does not cover database ids, relative source path or timestamps.
