@@ -57,6 +57,49 @@ def _decision(rule: dict[str, Any] | None, raw: str) -> dict[str, Any]:
     }
 
 
+def _attribution(rules: list[dict[str, Any]], term: str) -> dict[str, Any]:
+    """Substring-match every rule term against the normalized token text.
+
+    Spans are offsets into the already-normalized term, never the raw
+    token, so length-changing normalization (e.g. NFKC folding of
+    fullwidth letters) cannot misalign them. Candidates are ordered by
+    the arbitration ranking: longest term, then leftmost span, then the
+    stable rule order committed to by rules_hash, so the winner is
+    always candidates[0].
+    """
+
+    order = {rule["term"]: rank for rank, rule in enumerate(rules)}
+    hits: list[dict[str, Any]] = []
+    for rule in rules:
+        start = term.find(rule["term"])
+        while start >= 0:
+            hits.append(
+                {
+                    "term": rule["term"],
+                    "span_start": start,
+                    "span_end": start + len(rule["term"]),
+                    "disposition": rule["disposition"],
+                    "source": rule["source"],
+                }
+            )
+            start = term.find(rule["term"], start + 1)
+    hits.sort(
+        key=lambda hit: (-len(hit["term"]), hit["span_start"], order[hit["term"]])
+    )
+    if not hits:
+        return {}
+    reason = "only_candidate"
+    if len(hits) > 1:
+        winner, runner_up = hits[0], hits[1]
+        if len(winner["term"]) > len(runner_up["term"]):
+            reason = "longest_term"
+        elif winner["span_start"] < runner_up["span_start"]:
+            reason = "leftmost"
+        else:
+            reason = "stable_order"
+    return {"candidates": hits, "winner": hits[0], "winner_reason": reason}
+
+
 def build_snapshot(compilation: dict[str, Any], text_path: Path,
                    scope: str | None = None) -> dict[str, Any]:
     text_path = Path(text_path)
@@ -72,13 +115,20 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         )
     text = read_text(text_path)
     policy = NormalizationPolicy.from_mapping(compilation["normalization"])
-    rules = {rule["term"]: rule for rule in compilation["rules"]}
+    rules = compilation["rules"]
+    rule_map = {rule["term"]: rule for rule in rules}
     token_rows: list[dict[str, Any]] = []
     counts = {"keep": 0, "drop": 0, "merge": 0, "whitelist_exempt": 0}
+    subterm_hit = 0
+    subterm_only_affected = 0
     for index, token in enumerate(tokenize(text)):
         term = policy.normalize_validated(token["raw"])
-        decision = _decision(rules.get(term), token["raw"])
+        rule = rule_map.get(term)
+        decision = _decision(rule, token["raw"])
+        attribution = _attribution(rules, term)
         counts[decision["disposition"]] += 1
+        subterm_hit += bool(attribution)
+        subterm_only_affected += bool(attribution) and rule is None
         token_rows.append(
             {
                 "index": index,
@@ -90,12 +140,15 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
                 "target": decision["target"],
                 "source": decision["source"],
                 "overridden_by": decision["overridden_by"],
+                "attribution": attribution,
             }
         )
     summary = {
         "token_count": len(token_rows),
         **counts,
         "affected": len(token_rows) - counts["keep"],
+        "subterm_hit": subterm_hit,
+        "subterm_only_affected": subterm_only_affected,
     }
     semantic = {
         "kind": "snapshot",

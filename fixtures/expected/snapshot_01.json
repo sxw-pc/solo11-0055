@@ -10,7 +10,7 @@
     "case": "nfkc_lower",
     "whitespace": "collapse"
   },
-  "result_hash": "e376e48409f268856995d683e7a76f30802adfae8da5259db66aa4a98eb78b50",
+  "result_hash": "3cdae492345e6321410c841d739714ec14dea16bcc2b03fc9f8fb78c6ad718cc",
   "schema_version": 1,
   "scope": "lang-mix",
   "summary": {
@@ -18,6 +18,8 @@
     "drop": 3,
     "keep": 1,
     "merge": 2,
+    "subterm_hit": 6,
+    "subterm_only_affected": 0,
     "token_count": 7,
     "whitelist_exempt": 1
   },
@@ -25,6 +27,39 @@
   "text_id": "sample_01",
   "tokens": [
     {
+      "attribution": {
+        "candidates": [
+          {
+            "disposition": "drop",
+            "source": {
+              "kind": "stoplist",
+              "line": 7,
+              "raw": "alpha",
+              "rule": "stoplist:drop",
+              "table_id": "zh_stop",
+              "version": 2
+            },
+            "span_end": 5,
+            "span_start": 0,
+            "term": "alpha"
+          }
+        ],
+        "winner": {
+          "disposition": "drop",
+          "source": {
+            "kind": "stoplist",
+            "line": 7,
+            "raw": "alpha",
+            "rule": "stoplist:drop",
+            "table_id": "zh_stop",
+            "version": 2
+          },
+          "span_end": 5,
+          "span_start": 0,
+          "term": "alpha"
+        },
+        "winner_reason": "only_candidate"
+      },
       "disposition": "drop",
       "end": 5,
       "index": 0,
@@ -43,6 +78,39 @@
       "term": "alpha"
     },
     {
+      "attribution": {
+        "candidates": [
+          {
+            "disposition": "drop",
+            "source": {
+              "kind": "stoplist",
+              "line": 8,
+              "raw": "beta",
+              "rule": "stoplist:drop",
+              "table_id": "zh_stop",
+              "version": 2
+            },
+            "span_end": 4,
+            "span_start": 0,
+            "term": "beta"
+          }
+        ],
+        "winner": {
+          "disposition": "drop",
+          "source": {
+            "kind": "stoplist",
+            "line": 8,
+            "raw": "beta",
+            "rule": "stoplist:drop",
+            "table_id": "zh_stop",
+            "version": 2
+          },
+          "span_end": 4,
+          "span_start": 0,
+          "term": "beta"
+        },
+        "winner_reason": "only_candidate"
+      },
       "disposition": "drop",
       "end": 10,
       "index": 1,
@@ -61,6 +129,7 @@
       "term": "beta"
     },
     {
+      "attribution": {},
       "disposition": "keep",
       "end": 16,
       "index": 2,
@@ -79,6 +148,39 @@
       "term": "gamma"
     },
     {
+      "attribution": {
+        "candidates": [
+          {
+            "disposition": "merge",
+            "source": {
+              "kind": "synonym",
+              "line": 1,
+              "raw": "colour",
+              "rule": "synonym:merge",
+              "table_id": "synonym",
+              "version": 1
+            },
+            "span_end": 6,
+            "span_start": 0,
+            "term": "colour"
+          }
+        ],
+        "winner": {
+          "disposition": "merge",
+          "source": {
+            "kind": "synonym",
+            "line": 1,
+            "raw": "colour",
+            "rule": "synonym:merge",
+            "table_id": "synonym",
+            "version": 1
+          },
+          "span_end": 6,
+          "span_start": 0,
+          "term": "colour"
+        },
+        "winner_reason": "only_candidate"
+      },
       "disposition": "merge",
       "end": 24,
       "index": 3,
@@ -97,6 +199,39 @@
       "term": "colour"
     },
     {
+      "attribution": {
+        "candidates": [
+          {
+            "disposition": "merge",
+            "source": {
+              "kind": "synonym",
+              "line": 2,
+              "raw": "gray",
+              "rule": "synonym:merge",
+              "table_id": "synonym",
+              "version": 1
+            },
+            "span_end": 4,
+            "span_start": 0,
+            "term": "gray"
+          }
+        ],
+        "winner": {
+          "disposition": "merge",
+          "source": {
+            "kind": "synonym",
+            "line": 2,
+            "raw": "gray",
+            "rule": "synonym:merge",
+            "table_id": "synonym",
+            "version": 1
+          },
+          "span_end": 4,
+          "span_start": 0,
+          "term": "gray"
+        },
+        "winner_reason": "only_candidate"
+      },
       "disposition": "merge",
       "end": 29,
       "index": 4,
@@ -115,6 +250,39 @@
       "term": "gray"
     },
     {
+      "attribution": {
+        "candidates": [
+          {
+            "disposition": "drop",
+            "source": {
+              "kind": "noise",
+              "line": 2,
+              "raw": "noiseblock",
+              "rule": "noise:drop",
+              "table_id": "noise",
+              "version": 1
+            },
+            "span_end": 10,
+            "span_start": 0,
+            "term": "noiseblock"
+          }
+        ],
+        "winner": {
+          "disposition": "drop",
+          "source": {
+            "kind": "noise",
+            "line": 2,
+            "raw": "noiseblock",
+            "rule": "noise:drop",
+            "table_id": "noise",
+            "version": 1
+          },
+          "span_end": 10,
+          "span_start": 0,
+          "term": "noiseblock"
+        },
+        "winner_reason": "only_candidate"
+      },
       "disposition": "drop",
       "end": 40,
       "index": 5,
@@ -133,6 +301,53 @@
       "term": "noiseblock"
     },
     {
+      "attribution": {
+        "candidates": [
+          {
+            "disposition": "whitelist_exempt",
+            "source": {
+              "kind": "whitelist",
+              "line": 2,
+              "raw": "projectalpha",
+              "rule": "whitelist:whitelist_exempt",
+              "table_id": "whitelist",
+              "version": 1
+            },
+            "span_end": 12,
+            "span_start": 0,
+            "term": "projectalpha"
+          },
+          {
+            "disposition": "drop",
+            "source": {
+              "kind": "stoplist",
+              "line": 7,
+              "raw": "alpha",
+              "rule": "stoplist:drop",
+              "table_id": "zh_stop",
+              "version": 2
+            },
+            "span_end": 12,
+            "span_start": 7,
+            "term": "alpha"
+          }
+        ],
+        "winner": {
+          "disposition": "whitelist_exempt",
+          "source": {
+            "kind": "whitelist",
+            "line": 2,
+            "raw": "projectalpha",
+            "rule": "whitelist:whitelist_exempt",
+            "table_id": "whitelist",
+            "version": 1
+          },
+          "span_end": 12,
+          "span_start": 0,
+          "term": "projectalpha"
+        },
+        "winner_reason": "longest_term"
+      },
       "disposition": "whitelist_exempt",
       "end": 53,
       "index": 6,

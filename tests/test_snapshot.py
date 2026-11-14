@@ -40,6 +40,8 @@ def test_snapshot_trace_and_golden(populated, clock) -> None:
         "merge": 2,
         "whitelist_exempt": 1,
         "affected": 6,
+        "subterm_hit": 6,
+        "subterm_only_affected": 0,
     }
     tokens = record["tokens"]
     assert tokens[0]["raw"] == "Alpha"

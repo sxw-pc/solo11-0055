@@ -193,10 +193,22 @@ appear under `supporting_sources`.
      "disposition": "drop", "target": null,
      "source": {"table_id": "zh_stop", "version": 2, "kind": "stoplist",
                 "line": 7, "raw": "alpha", "rule": "stoplist:drop"},
-     "overridden_by": []}
+     "overridden_by": [],
+     "attribution": {
+       "candidates": [
+         {"term": "alpha", "span_start": 0, "span_end": 5,
+          "disposition": "drop",
+          "source": {"table_id": "zh_stop", "version": 2, "kind": "stoplist",
+                     "line": 7, "raw": "alpha", "rule": "stoplist:drop"}}
+       ],
+       "winner": {"term": "alpha", "span_start": 0, "span_end": 5,
+                  "disposition": "drop", "source": {"table_id": "zh_stop"}},
+       "winner_reason": "only_candidate"}
+    }
   ],
   "summary": {"token_count": 7, "keep": 1, "drop": 3, "merge": 2,
-              "whitelist_exempt": 1, "affected": 6},
+              "whitelist_exempt": 1, "affected": 6,
+              "subterm_hit": 6, "subterm_only_affected": 0},
   "result_hash": "..."
 }
 ```
@@ -204,6 +216,20 @@ appear under `supporting_sources`.
 `start`/`end` are Python code-point indexes into the original text. Punctuation
 and whitespace are separators, not tokens. `_` is retained inside words.
 `keep` tokens use source kind `default` and rule `default:keep`.
+
+Beyond whole-term exact matching, every token is also substring-matched against
+all compiled rule terms on its normalized text. `attribution.candidates` lists
+each hit with the normalized rule `term`, `span_start`/`span_end` (code-point
+offsets into the normalized `term`, never the raw token, so length-changing
+normalization such as NFKC cannot misalign them), `disposition` and `source`.
+Candidates are ordered by the arbitration ranking — longest term, then leftmost
+span, then the stable rule order committed to by `rules_hash` — so the unique
+`winner` is always `candidates[0]`; `winner_reason` is one of `only_candidate`,
+`longest_term`, `leftmost` or `stable_order`. A token with no substring hit has
+an empty `attribution` (`{}`). Exact-match disposition/target/source behaviour
+is unchanged. In `summary`, `subterm_hit` counts tokens with at least one
+substring candidate and `subterm_only_affected` counts tokens that gained
+attribution only through substring matching (no exact rule hit).
 
 `result_hash` covers text id/hash, compilation identity, scope, policy, tokens
 and summary. It does not cover database ids, relative source path or timestamps.
