@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import FIXTURES, compile_fixture, snapshot_set
+from conftest import FIXTURES, TEXTS, compile_fixture, snapshot_set
 from stoplist_ledger.errors import LedgerError
 from stoplist_ledger.impact import (
     build_impact_payload,
@@ -189,3 +189,34 @@ def test_impact_json_has_no_absolute_source_paths(populated, clock) -> None:
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "D:\\\\" not in serialized
     assert "/home/" not in serialized
+
+
+def test_segmented_snapshot_aligns_with_legacy_in_impact(populated, clock,
+                                                         tmp_path) -> None:
+    from stoplist_ledger.snapshot import snapshot_text
+
+    a = compile_fixture(populated, clock, "pipeline_a.yaml")
+    b = compile_fixture(populated, clock, "pipeline_b.yaml")
+    text = TEXTS[0].read_text(encoding="utf-8")
+    cut = 8  # splits the token "beta" across the two segment files
+    first = tmp_path / "sample_01#p1.txt"
+    first.write_text(text[:cut], encoding="utf-8")
+    second = tmp_path / "sample_01#p2.txt"
+    second.write_text(text[cut:], encoding="utf-8")
+    segmented = snapshot_text(
+        populated, a["id"], clock=clock,
+        segments=[("sample_01#p1", first), ("sample_01#p2", second)],
+        text_id="sample_01",
+    )
+    legacy = snapshot_text(populated, b["id"], TEXTS[0], clock)
+    payload = build_impact_payload(
+        populated, [segmented["id"]], [legacy["id"]], clock.timestamp()
+    )
+    expected = json.loads(
+        (FIXTURES / "expected" / "impact_ab.json").read_text(encoding="utf-8")
+    )
+    golden = [item for item in expected["text_changes"]
+              if item["text_id"] == "sample_01"]
+    # A segmented text aligns by text_id and diffs exactly like the
+    # single-file snapshot of the same string.
+    assert payload["text_changes"] == golden
