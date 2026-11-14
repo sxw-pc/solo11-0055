@@ -1,0 +1,7 @@
+# Synthetic Mandarin stoplist, version 1. All terms are placeholders.
+的
+了
+和
+在
+是
+alpha

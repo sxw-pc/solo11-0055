@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · Stoplist Ledger</title>
+  <style>
+    :root { --ink: #1d2733; --muted: #5b6673; --paper: #f6f4ee;
+      --panel: #fff; --line: #d9d4c8; --accent: #1c6758;
+      --accent-soft: #e4f0eb; --warn: #8a4b16; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--paper);
+      font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    header { background: var(--ink); color: #f7f4eb; padding: 18px 0 14px; }
+    .wrap { width: min(1120px, calc(100% - 36px)); margin: 0 auto; }
+    .brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .brand h1 { margin: 0; font-size: 1.28rem; letter-spacing: .01em; }
+    .tag { font-size: .72rem; text-transform: uppercase; letter-spacing: .13em;
+      color: #b9d8cc; border: 1px solid #577b6e; padding: 2px 8px;
+      border-radius: 999px; }
+    nav { margin-top: 13px; display: flex; gap: 8px; flex-wrap: wrap; }
+    nav a { color: #f7f4eb; text-decoration: none; border: 1px solid #52606b;
+      padding: 5px 10px; border-radius: 5px; font-size: .86rem; }
+    nav a:hover, nav a:focus { background: #34424e; }
+    main { padding: 28px 0 56px; }
+    h2 { font-size: 1.02rem; letter-spacing: .04em; text-transform: uppercase; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    .stat b { display: block; font-size: 1.6rem; color: var(--accent); }
+    .stat span { color: var(--muted); font-size: .84rem; }
+    .panel { background: var(--panel); border: 1px solid var(--line);
+      border-radius: 8px; padding: 18px; margin: 16px 0; }
+    .facts { width: 100%; border-collapse: collapse; }
+    .facts th, .facts td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .facts th { width: 34%; color: var(--muted); font-weight: 600; }
+    ul.links { list-style: none; margin: 0; padding: 0; }
+    ul.links li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+    ul.links a { color: var(--accent); font-weight: 600; }
+    pre { background: #17212b; color: #e7eee9; padding: 16px; border-radius: 7px;
+      overflow: auto; font-size: .78rem; line-height: 1.5;
+      font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+    .note { color: var(--muted); font-size: .84rem; }
+    .warning { color: var(--warn); font-weight: 600; }
+    footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; padding: 18px 0 40px; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand"><h1>Stoplist Ledger</h1>
+      <span class="tag">offline · read-only audit</span></div>
+    <nav aria-label="Primary">
+      <a href="{{ url_for('index') }}">Overview</a>
+      <a href="{{ url_for('tables') }}">Tables</a>
+      <a href="{{ url_for('compilations') }}">Compilations</a>
+      <a href="{{ url_for('snapshots') }}">Snapshots</a>
+      <a href="{{ url_for('checks') }}">Checks</a>
+      <a href="{{ url_for('impacts') }}">Impacts</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <h2>{{ title }}</h2>
+  <p class="note">
+    This page reads the local SQLite ledger. It has no write endpoint and
+    loads no remote fonts, scripts, styles or images.
+  </p>
+
+  {% if summary %}
+  <section class="stats" aria-label="Ledger counts">
+    <div class="stat"><b>{{ summary.table_versions or 0 }}</b><span>table versions</span></div>
+    <div class="stat"><b>{{ summary.compilations or 0 }}</b><span>compilations</span></div>
+    <div class="stat"><b>{{ summary.snapshots or 0 }}</b><span>snapshots</span></div>
+    <div class="stat"><b>{{ summary.checks or 0 }}</b><span>check reports</span></div>
+    <div class="stat"><b>{{ summary.impacts or 0 }}</b><span>impact reports</span></div>
+  </section>
+  {% endif %}
+  {% if facts %}
+  <section class="panel">
+    <h2>Facts</h2>
+    <table class="facts">
+      <tbody>
+      {% for key, value in facts.items() %}
+        <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+  {% if links %}
+  <section class="panel">
+    <h2>Records</h2>
+    <ul class="links">
+      {% for link in links %}
+      <li><a href="{{ link.href }}">{{ link.label }}</a></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+  {% if payload_json %}
+  <section class="panel">
+    <h2>Read-only payload</h2>
+    <p class="note">Machine-readable detail for this record, rendered from the ledger.</p>
+    <pre>{{ payload_json }}</pre>
+  </section>
+  {% endif %}
+
+  <p class="warning">Synthetic demo data only. No real people, domains or corpora are included.</p>
+</main>
+<footer>
+  <div class="wrap">
+    stoplist-ledger · local-only audit surface · no external asset references
+  </div>
+</footer>
+</body>
+</html>

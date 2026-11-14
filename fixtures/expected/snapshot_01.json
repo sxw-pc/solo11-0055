@@ -1,0 +1,154 @@
+{
+  "compilation": {
+    "name": "pipeline-a",
+    "rule_count": 14,
+    "rules_hash": "93b72805fe4c5d9ff814a0a30e00da5f385a263f132559289a95f2c8eb655f7e",
+    "scope": "lang-mix"
+  },
+  "kind": "snapshot",
+  "normalization": {
+    "case": "nfkc_lower",
+    "whitespace": "collapse"
+  },
+  "result_hash": "e376e48409f268856995d683e7a76f30802adfae8da5259db66aa4a98eb78b50",
+  "schema_version": 1,
+  "scope": "lang-mix",
+  "summary": {
+    "affected": 6,
+    "drop": 3,
+    "keep": 1,
+    "merge": 2,
+    "token_count": 7,
+    "whitelist_exempt": 1
+  },
+  "text_hash": "1d7bce4236739897e588dea7c969e3016e85d6aabc942d736d63d039e7a2428a",
+  "text_id": "sample_01",
+  "tokens": [
+    {
+      "disposition": "drop",
+      "end": 5,
+      "index": 0,
+      "overridden_by": [],
+      "raw": "Alpha",
+      "source": {
+        "kind": "stoplist",
+        "line": 7,
+        "raw": "alpha",
+        "rule": "stoplist:drop",
+        "table_id": "zh_stop",
+        "version": 2
+      },
+      "start": 0,
+      "target": null,
+      "term": "alpha"
+    },
+    {
+      "disposition": "drop",
+      "end": 10,
+      "index": 1,
+      "overridden_by": [],
+      "raw": "beta",
+      "source": {
+        "kind": "stoplist",
+        "line": 8,
+        "raw": "beta",
+        "rule": "stoplist:drop",
+        "table_id": "zh_stop",
+        "version": 2
+      },
+      "start": 6,
+      "target": null,
+      "term": "beta"
+    },
+    {
+      "disposition": "keep",
+      "end": 16,
+      "index": 2,
+      "overridden_by": [],
+      "raw": "gamma",
+      "source": {
+        "kind": "default",
+        "line": 0,
+        "raw": "gamma",
+        "rule": "default:keep",
+        "table_id": null,
+        "version": 0
+      },
+      "start": 11,
+      "target": null,
+      "term": "gamma"
+    },
+    {
+      "disposition": "merge",
+      "end": 24,
+      "index": 3,
+      "overridden_by": [],
+      "raw": "colour",
+      "source": {
+        "kind": "synonym",
+        "line": 1,
+        "raw": "colour",
+        "rule": "synonym:merge",
+        "table_id": "synonym",
+        "version": 1
+      },
+      "start": 18,
+      "target": "color",
+      "term": "colour"
+    },
+    {
+      "disposition": "merge",
+      "end": 29,
+      "index": 4,
+      "overridden_by": [],
+      "raw": "gray",
+      "source": {
+        "kind": "synonym",
+        "line": 2,
+        "raw": "gray",
+        "rule": "synonym:merge",
+        "table_id": "synonym",
+        "version": 1
+      },
+      "start": 25,
+      "target": "grey",
+      "term": "gray"
+    },
+    {
+      "disposition": "drop",
+      "end": 40,
+      "index": 5,
+      "overridden_by": [],
+      "raw": "noiseblock",
+      "source": {
+        "kind": "noise",
+        "line": 2,
+        "raw": "noiseblock",
+        "rule": "noise:drop",
+        "table_id": "noise",
+        "version": 1
+      },
+      "start": 30,
+      "target": null,
+      "term": "noiseblock"
+    },
+    {
+      "disposition": "whitelist_exempt",
+      "end": 53,
+      "index": 6,
+      "overridden_by": [],
+      "raw": "projectalpha",
+      "source": {
+        "kind": "whitelist",
+        "line": 2,
+        "raw": "projectalpha",
+        "rule": "whitelist:whitelist_exempt",
+        "table_id": "whitelist",
+        "version": 1
+      },
+      "start": 41,
+      "target": null,
+      "term": "projectalpha"
+    }
+  ]
+}

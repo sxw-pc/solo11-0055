@@ -1,0 +1,1 @@
+# Intentionally empty table used by the negative-check fixture.

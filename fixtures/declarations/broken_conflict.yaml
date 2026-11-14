@@ -1,0 +1,23 @@
+name: broken-conflict
+scope: lang-mix
+# This declaration is intentionally invalid for checker coverage.
+normalization:
+  case: case_sensitive
+  whitespace: trim
+tables:
+  - id: conflict_stop
+    version: 1
+    scopes: ["*"]
+  - id: broken_synonym
+    version: 1
+    scopes: ["*"]
+  - id: whitelist
+    version: 2
+    scopes: ["*"]
+  - id: empty
+    version: 1
+    scopes: ["*"]
+  - id: zh_stop
+    version: 99
+    scopes: ["*"]
+priority: [conflict_stop, broken_synonym, empty, whitelist, conflict_stop]

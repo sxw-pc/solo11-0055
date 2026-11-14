@@ -1,0 +1,3 @@
+# Synthetic noise-word blacklist.
+noiseblock
+promo_x

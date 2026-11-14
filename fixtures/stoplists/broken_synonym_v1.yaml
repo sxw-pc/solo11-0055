@@ -1,0 +1,5 @@
+# Negative-check fixture: cycle and missing target are intentional.
+alpha: alphacore
+xcycle: ycycle
+ycycle: xcycle
+zeta: missingtarget

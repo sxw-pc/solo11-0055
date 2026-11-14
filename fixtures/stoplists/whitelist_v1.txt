@@ -1,0 +1,4 @@
+# Synthetic keep-word whitelist, version 1.
+projectalpha
+color
+grey

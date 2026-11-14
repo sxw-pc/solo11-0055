@@ -1,0 +1,8 @@
+# Synthetic Mandarin stoplist, version 2. Changes are intentional fixtures.
+的
+了
+和
+在
+是
+alpha
+beta

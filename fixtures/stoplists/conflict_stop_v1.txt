@@ -1,0 +1,4 @@
+# Negative-check fixture: deliberately overlaps a synonym and whitelist.
+alpha
+Token
+token

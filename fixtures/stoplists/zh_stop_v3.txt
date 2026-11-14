@@ -1,0 +1,8 @@
+# Synthetic Mandarin stoplist, version 3. Used by pipeline B.
+的
+了
+和
+在
+是
+beta
+gamma

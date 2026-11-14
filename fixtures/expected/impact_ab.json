@@ -1,0 +1,220 @@
+{
+  "kind": "impact-golden",
+  "rule_changes": {
+    "exemption_changes": [
+      {
+        "after": {
+          "disposition": "whitelist_exempt",
+          "target": null
+        },
+        "before": {
+          "disposition": "drop",
+          "target": null
+        },
+        "term": "alpha"
+      },
+      {
+        "after": {
+          "disposition": "keep",
+          "target": null
+        },
+        "before": {
+          "disposition": "whitelist_exempt",
+          "target": null
+        },
+        "term": "grey"
+      },
+      {
+        "after": {
+          "disposition": "whitelist_exempt",
+          "target": null
+        },
+        "before": {
+          "disposition": "keep",
+          "target": null
+        },
+        "term": "silver"
+      }
+    ],
+    "gone_dropped": [
+      {
+        "after": {
+          "disposition": "whitelist_exempt",
+          "target": null
+        },
+        "before": {
+          "disposition": "drop",
+          "target": null
+        },
+        "term": "alpha"
+      }
+    ],
+    "merge_target_changes": [
+      {
+        "after": {
+          "disposition": "merge",
+          "target": "silver"
+        },
+        "before": {
+          "disposition": "merge",
+          "target": "grey"
+        },
+        "term": "gray"
+      }
+    ],
+    "new_dropped": [
+      {
+        "after": {
+          "disposition": "drop",
+          "target": null
+        },
+        "before": {
+          "disposition": "keep",
+          "target": null
+        },
+        "term": "gamma"
+      }
+    ]
+  },
+  "summary": {
+    "affected_texts": 3,
+    "affected_tokens": 8,
+    "exemption_changes": 3,
+    "gone_dropped_terms": 1,
+    "merge_target_changes": 1,
+    "new_dropped_terms": 1
+  },
+  "text_changes": [
+    {
+      "affected": true,
+      "affected_tokens": 3,
+      "after_hash": "2276728f77fcbf6d75176b60e618094e84f227c311b1fba213263da3b5a047c1",
+      "before_hash": "e376e48409f268856995d683e7a76f30802adfae8da5259db66aa4a98eb78b50",
+      "changes": [
+        {
+          "after": {
+            "disposition": "whitelist_exempt",
+            "target": null
+          },
+          "before": {
+            "disposition": "drop",
+            "target": null
+          },
+          "index": 0,
+          "raw": "Alpha",
+          "term": "alpha"
+        },
+        {
+          "after": {
+            "disposition": "drop",
+            "target": null
+          },
+          "before": {
+            "disposition": "keep",
+            "target": null
+          },
+          "index": 2,
+          "raw": "gamma",
+          "term": "gamma"
+        },
+        {
+          "after": {
+            "disposition": "merge",
+            "target": "silver"
+          },
+          "before": {
+            "disposition": "merge",
+            "target": "grey"
+          },
+          "index": 4,
+          "raw": "gray",
+          "term": "gray"
+        }
+      ],
+      "text_id": "sample_01"
+    },
+    {
+      "affected": true,
+      "affected_tokens": 1,
+      "after_hash": "c39fa4c04bcf36c8086460ed79967b38deef526edca6509d9a9e695ebbf71338",
+      "before_hash": "a66383e7f0d5addb048d15ed23f948afe2a92175902332fd9cde7142559834b6",
+      "changes": [
+        {
+          "after": {
+            "disposition": "drop",
+            "target": null
+          },
+          "before": {
+            "disposition": "keep",
+            "target": null
+          },
+          "index": 1,
+          "raw": "gamma",
+          "term": "gamma"
+        }
+      ],
+      "text_id": "sample_02"
+    },
+    {
+      "affected": true,
+      "affected_tokens": 4,
+      "after_hash": "c5401fb64fedbfc39e1a81f4d339864db21dfe2c7dfff5ac46284673e602cb57",
+      "before_hash": "33821d4f8167c708394ea1645d1eb2878f9f9a0f393dcd7c9d58718955cd0b70",
+      "changes": [
+        {
+          "after": {
+            "disposition": "whitelist_exempt",
+            "target": null
+          },
+          "before": {
+            "disposition": "drop",
+            "target": null
+          },
+          "index": 0,
+          "raw": "alpha",
+          "term": "alpha"
+        },
+        {
+          "after": {
+            "disposition": "drop",
+            "target": null
+          },
+          "before": {
+            "disposition": "keep",
+            "target": null
+          },
+          "index": 1,
+          "raw": "gamma",
+          "term": "gamma"
+        },
+        {
+          "after": {
+            "disposition": "merge",
+            "target": "silver"
+          },
+          "before": {
+            "disposition": "merge",
+            "target": "grey"
+          },
+          "index": 2,
+          "raw": "gray",
+          "term": "gray"
+        },
+        {
+          "after": {
+            "disposition": "keep",
+            "target": null
+          },
+          "before": {
+            "disposition": "whitelist_exempt",
+            "target": null
+          },
+          "index": 3,
+          "raw": "grey",
+          "term": "grey"
+        }
+      ],
+      "text_id": "sample_03"
+    }
+  ]
+}
