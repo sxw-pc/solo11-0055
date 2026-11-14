@@ -1,0 +1,5 @@
+name: scoped-en-child
+extends: scoped_base_zh.yaml
+overrides:
+  scope: lang-en
+  priority: [zh_stop]

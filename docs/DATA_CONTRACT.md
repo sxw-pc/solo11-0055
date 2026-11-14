@@ -110,7 +110,47 @@ Validation rules:
 - If `merge_targets` is present, every effective merge target must appear in it
   after declaration-policy normalization.
 
-Compiler failure codes include `E_DECL_INVALID`, `E_BAD_POLICY`,
+### 5a. Declaration inheritance
+
+A child declaration replaces the full copy with a diff against a parent file:
+
+```yaml
+name: pipeline-child
+extends: pipeline_base.yaml        # path resolved relative to this file
+overrides:
+  scope: lang-mix
+  normalization: {case: lower, whitespace: collapse}
+  tables:
+    - id: zh_stop                  # same id -> patch version/scopes
+      version: 3
+      scopes: [lang-zh, lang-mix]
+    - id: conflict_stop           # new id -> appended reference
+      version: 1
+      scopes: ["*"]
+  priority: [whitelist, conflict_stop, synonym, noise, zh_stop]
+  merge_targets: [silver, color]
+```
+
+Merge semantics differ by field:
+
+- `normalization` is replaced as a whole (no per-key merge); an omitted key in
+  the child policy falls back to the policy defaults, not the parent's value.
+- `tables` merge by table `id`: a matching id patches `version`/`scopes`, an
+  unknown id is appended. There is no way to delete an inherited table.
+- `merge_targets` are appended on top of the parent list and de-duplicated in
+  first-seen order.
+- `priority` is overwritten wholesale, then re-validated against every table
+  that survives scope filtering; a gap fails with `E_DECL_INVALID`.
+- `scope` is overwritten. If the new scope filters out every inherited table,
+  the error details mark the empty set as `inherited: true` and name the
+  originating layer of each table rather than blaming the child file alone.
+
+Chains may be longer than two levels. Self references and transitive cycles
+(A→B→A) fail deterministically with `E_DECL_CYCLE` and the offending path list;
+a missing parent fails with `E_IO`. Only the root (non-extending) file carries
+the full field set; child files accept `name`, `extends` and `overrides` only.
+
+Compiler failure codes include `E_DECL_INVALID`, `E_DECL_CYCLE`, `E_BAD_POLICY`,
 `E_REF_NOT_FOUND`, `E_DUP_PRIORITY` and `E_MERGE_TARGET_NOT_ALLOWED`.
 
 ## 6. Stored table-version record
@@ -176,6 +216,18 @@ Diff object:
 Rules are sorted by `term`. `overridden_by` preserves priority order; each entry
 contains the losing `disposition`, `target`, `source` and a reason. Equal losers
 appear under `supporting_sources`.
+
+For inherited declarations the payload additionally carries:
+
+- `resolved_chain`: root-first list of every layer with `layer`, `role`
+  (`root`/`child`), `name`, portable `path` and the file's `file_sha256`.
+- `field_origins`: per field and per table id, the effective layer and an
+  `overridden` list recording each previous layer and its `old_value`.
+- `declaration_hash`: SHA-256 over the full chain fingerprint
+  (`path` + `file_sha256` per layer), so editing any layer changes it.
+- The `rules_hash` identity object includes an `inheritance_chain` entry, so a
+  change in any layer file invalidates the hash and forces a new compilation
+  row instead of reusing the old `(name, rules_hash)` record.
 
 ## 8. Snapshot JSON
 

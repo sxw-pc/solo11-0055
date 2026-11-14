@@ -1,0 +1,20 @@
+name: pipeline-base
+scope: lang-mix
+normalization:
+  case: nfkc_lower
+  whitespace: collapse
+tables:
+  - id: zh_stop
+    version: 2
+    scopes: [lang-zh, lang-mix]
+  - id: synonym
+    version: 1
+    scopes: ["*"]
+  - id: noise
+    version: 1
+    scopes: [lang-mix]
+  - id: whitelist
+    version: 1
+    scopes: ["*"]
+priority: [whitelist, synonym, noise, zh_stop]
+merge_targets: [color, grey]

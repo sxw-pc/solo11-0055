@@ -62,8 +62,40 @@ def _metadata(payload: dict[str, Any]) -> list[str]:
     return ["## Metadata", ""] + _table(["Field", "Value"], rows) + [""]
 
 
+def _override_text(provenance: dict[str, Any]) -> str:
+    return ", ".join(
+        f"{item['layer_name']}={canonical_json(item['old_value'])}"
+        for item in provenance.get("overridden", [])) or "-"
+
+
+def _inheritance(payload: dict[str, Any]) -> list[str]:
+    chain = payload.get("resolved_chain") or []
+    if len(chain) <= 1:
+        return []
+    origins = payload.get("field_origins", {})
+    lines = ["## Inheritance chain", ""]
+    lines += _table(
+        ["Layer", "Role", "Name", "File", "Content hash"],
+        [(item["layer"], item["role"], item["name"], item["path"],
+          item["file_sha256"][:16]) for item in chain])
+    sections = [
+        ("Field provenance",
+         ((field, p["layer_name"], _override_text(p))
+          for field, p in sorted(origins.items()) if field != "tables")),
+        ("Table provenance",
+         ((name, p["layer_name"], _override_text(p))
+          for name, p in sorted(origins.get("tables", {}).items()))),
+    ]
+    for heading, rows in sections:
+        lines += ["", f"### {heading}", ""]
+        lines += _table(["Name", "Effective layer", "Overridden values"], rows)
+    lines.append("")
+    return lines
+
+
 def _compilation(payload: dict[str, Any]) -> list[str]:
     lines = _metadata(payload)
+    lines += _inheritance(payload)
     lines += ["## Tables and priority", ""]
     lines += _table(
         ["Table", "Version", "Kind", "Entries", "Content hash"],

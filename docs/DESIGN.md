@@ -86,26 +86,38 @@ source offsets.
 
 ## Compilation algorithm
 
-1. Parse and type-check the declaration. Unknown normalization keys and malformed
-   references fail with `E_DECL_INVALID` or `E_BAD_POLICY`.
-2. Determine which referenced tables are active for the declaration scope:
+1. Resolve the declaration chain: follow `extends` links to the non-extending
+   root, reject self references and transitive cycles with `E_DECL_CYCLE`, and
+   parse each layer. Child layers are type-checked as diffs; only `name`,
+   `extends` and `overrides` are accepted.
+2. Fold the root-first layers using field-specific semantics: `scope` and
+   `priority` overwrite, `normalization` replaces wholesale, `tables` merge by
+   id (patch in place or append) and `merge_targets` append and de-duplicate.
+   Provenance (effective layer plus every overridden old value) is recorded for
+   the `resolved_chain` report.
+3. Parse and type-check the merged declaration. Unknown normalization keys and
+   malformed references fail with `E_DECL_INVALID` or `E_BAD_POLICY`.
+4. Determine which referenced tables are active for the declaration scope:
    a table applies when its scope list contains `*`, `all` or the declaration
-   scope.
-3. Load each active table version. Missing versions fail with
+   scope. If scope filtering empties the table set, the error distinguishes an
+   inherited empty set (`inherited: true`, origin layer per table) from a
+   single-file mistake.
+5. Load each active table version. Missing versions fail with
    `E_REF_NOT_FOUND`.
-4. Validate uniqueness/completeness of the priority list.
-5. Iterate tables in high-to-low priority and entries in file order. Each entry
+6. Validate uniqueness/completeness of the priority list.
+7. Iterate tables in high-to-low priority and entries in file order. Each entry
    proposes:
    - `drop` for stoplist/noise;
    - `merge` plus normalized target for synonym;
    - `whitelist_exempt` for whitelist.
-6. The first proposal for a normalized term wins. Later proposals with a
+8. The first proposal for a normalized term wins. Later proposals with a
    different disposition/target enter the winner's `overridden_by` chain; equal
    proposals become `supporting_sources`.
-7. If `merge_targets` is present, every effective merge target must normalize to
+9. If `merge_targets` is present, every effective merge target must normalize to
    an allow-list member, otherwise `E_MERGE_TARGET_NOT_ALLOWED`.
-8. Sort rules by normalized term. Count dispositions. Hash scope, normalization,
-   active tables (id/version/kind/content hash), priority and rules.
+10. Sort rules by normalized term. Count dispositions. Hash scope, normalization,
+    active tables (id/version/kind/content hash), priority, rules and, for
+    inherited declarations, the full chain of file paths and content hashes.
 
 Each entry's `source` names the table id, version, kind, source line, raw form
 and rule label such as `stoplist:drop`. This is enough to reconstruct why a term
@@ -185,6 +197,10 @@ counts and a stable hash.
 - SQLite row ids appear only as audit/user-facing identifiers, not inside
   semantic rule/snapshot hashes.
 - Repeated compilations and snapshots reuse identical rows.
+- Declaration inheritance contributes a chain fingerprint (per-layer portable
+  path and SHA-256 file content) to both `declaration_hash` and `rules_hash`;
+  editing any layer file changes both, so stale `save_compilation` rows are
+  never reused.
 - Reset resolves paths before checking that the target equals or descends from
   the default `var/` directory.
 

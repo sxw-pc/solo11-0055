@@ -1,0 +1,7 @@
+name: scoped-zh-base
+scope: lang-zh
+tables:
+  - id: zh_stop
+    version: 2
+    scopes: [lang-zh]
+priority: [zh_stop]

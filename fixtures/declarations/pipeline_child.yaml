@@ -1,0 +1,16 @@
+name: pipeline-child
+extends: pipeline_base.yaml
+overrides:
+  scope: lang-mix
+  normalization:
+    case: lower
+    whitespace: collapse
+  tables:
+    - id: zh_stop
+      version: 3
+      scopes: [lang-zh, lang-mix]
+    - id: conflict_stop
+      version: 1
+      scopes: ["*"]
+  priority: [whitelist, conflict_stop, synonym, noise, zh_stop]
+  merge_targets: [silver, color]
