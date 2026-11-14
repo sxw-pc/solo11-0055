@@ -47,6 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     compile_cmd = commands.add_parser("compile", help="compile a declaration")
     compile_cmd.add_argument("declaration", type=Path)
+    compile_cmd.add_argument(
+        "--strict", action="store_true",
+        help="reject with E_DECL_INVALID when scope diagnostics report warnings",
+    )
     _report_args(compile_cmd)
 
     snapshot_cmd = commands.add_parser("snapshot", help="snapshot one text")
@@ -163,7 +167,8 @@ def dispatch(args: argparse.Namespace) -> int:
         ]), end="")
         return 0
     if args.command == "compile":
-        record = compile_declaration(store, args.declaration, clock, args.operator)
+        record = compile_declaration(store, args.declaration, clock,
+                                     args.operator, strict=args.strict)
         path = _emit_report(record, args, record["name"], var_dir)
         print(pretty_json({"id": record["id"], "name": record["name"],
                            "rules_hash": record["rules_hash"],

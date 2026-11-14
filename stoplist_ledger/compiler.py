@@ -41,6 +41,7 @@ def load_declaration(path: Path) -> dict[str, Any]:
         fail("E_DECL_INVALID", "tables must be a non-empty list")
     tables: list[dict[str, Any]] = []
     seen: set[str] = set()
+    empty_scope_indexes: list[int] = []
     for index, item in enumerate(raw_tables):
         if not isinstance(item, Mapping):
             fail("E_DECL_INVALID", "table reference must be a mapping", index=index)
@@ -57,6 +58,9 @@ def load_declaration(path: Path) -> dict[str, Any]:
         if table_id in seen:
             fail("E_DECL_INVALID", "duplicate table reference", table=table_id)
         seen.add(table_id)
+        # Long-standing fallback: an empty/missing scopes array becomes ["*"].
+        if not scopes:
+            empty_scope_indexes.append(len(tables))
         tables.append(
             {"id": table_id, "version": version, "scopes": list(scopes) or ["*"]}
         )
@@ -82,6 +86,11 @@ def load_declaration(path: Path) -> dict[str, Any]:
     declaration["declaration_path"] = display_path(path)
     declaration["policy"] = policy
     declaration["declaration_hash"] = stable_hash(declaration | {"policy": None})
+    # Marker attached only after hashing so it never alters declaration_hash
+    # or any downstream compilation output; diagnostics uses it to name the
+    # load_declaration ['*'] fallback instead of reporting a false exclusion.
+    for marker_index in empty_scope_indexes:
+        declaration["tables"][marker_index]["_scopes_was_empty"] = True
     return declaration
 
 
@@ -250,7 +259,20 @@ def compile_declaration(
     declaration_path: Path,
     clock: FixedClock,
     operator: str = "op-demo-01",
+    strict: bool = False,
 ) -> dict[str, Any]:
+    if strict:
+        from .diagnostics import diagnose_declaration_scopes
+
+        diagnosis = diagnose_declaration_scopes(declaration_path)
+        if diagnosis["warnings"]:
+            fail(
+                "E_DECL_INVALID",
+                "strict compilation rejected by scope diagnostics",
+                declaration_path=diagnosis["declaration_path"],
+                scope=diagnosis["scope"],
+                warnings=diagnosis["warnings"],
+            )
     payload = build_compilation(store, declaration_path)
     saved = store.save_compilation(payload, operator, clock.timestamp())
     store.add_audit(
