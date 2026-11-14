@@ -98,36 +98,40 @@ class LedgerStore(RecordMixin):
         return record
 
     # ---- table versions -------------------------------------------------
-    def find_by_content(self, content_hash: str) -> dict[str, Any] | None:
+    def _versions(self, sql: str,
+                  args: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM table_versions WHERE content_hash = ?", (content_hash,)
-            ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+            rows = conn.execute(sql, args).fetchall()
+        return [self._decode(row, "entries_json", "diff_json") for row in rows]
+
+    def _version(self, sql: str, args: tuple[Any, ...]) -> dict[str, Any] | None:
+        rows = self._versions(sql, args)
+        return rows[0] if rows else None
+
+    def find_by_content(self, content_hash: str) -> dict[str, Any] | None:
+        return self._version(
+            "SELECT * FROM table_versions WHERE content_hash = ?",
+            (content_hash,))
 
     def get_version(self, table_id: str, version: int) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM table_versions WHERE table_id = ? AND version = ?",
-                (table_id, version),
-            ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+        return self._version(
+            "SELECT * FROM table_versions WHERE table_id = ? AND version = ?",
+            (table_id, version))
 
     def get_version_by_id(self, version_id: int) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM table_versions WHERE id = ?", (version_id,)
-            ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+        return self._version("SELECT * FROM table_versions WHERE id = ?",
+                             (version_id,))
 
     def latest_version(self, table_id: str) -> dict[str, Any] | None:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM table_versions WHERE table_id = ? "
-                "ORDER BY version DESC LIMIT 1",
-                (table_id,),
-            ).fetchone()
-        return self._decode(row, "entries_json", "diff_json") if row else None
+        return self._version(
+            "SELECT * FROM table_versions WHERE table_id = ? "
+            "ORDER BY version DESC LIMIT 1", (table_id,))
+
+    def version_chain(self, table_id: str) -> list[dict[str, Any]]:
+        """All versions of one table, oldest first, for lineage replay."""
+        return self._versions(
+            "SELECT * FROM table_versions WHERE table_id = ? ORDER BY version",
+            (table_id,))
 
     def list_versions(self, table_id: str | None = None) -> list[dict[str, Any]]:
         sql = "SELECT * FROM table_versions"
@@ -135,10 +139,7 @@ class LedgerStore(RecordMixin):
         if table_id is not None:
             sql += " WHERE table_id = ?"
             args = (table_id,)
-        sql += " ORDER BY table_id, version"
-        with self._connect() as conn:
-            rows = conn.execute(sql, args).fetchall()
-        return [self._decode(row, "entries_json", "diff_json") for row in rows]
+        return self._versions(sql + " ORDER BY table_id, version", args)
 
     def list_tables(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
@@ -240,8 +241,6 @@ class LedgerStore(RecordMixin):
     def summary(self) -> dict[str, int]:
         tables = ("table_versions", "compilations", "snapshots", "checks", "impacts")
         with self._connect() as conn:
-            counts = {
-                table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-                for table in tables
-            }
-        return counts
+            return {table: int(conn.execute(
+                f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                for table in tables}

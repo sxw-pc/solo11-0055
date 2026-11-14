@@ -18,10 +18,9 @@ def _outcome(rule: dict[str, Any] | None) -> dict[str, Any]:
     return {"disposition": rule["disposition"], "target": rule["target"]}
 
 
-def compare_rule_sets(
-    left_rules: list[dict[str, Any]],
-    right_rules: list[dict[str, Any]],
-) -> dict[str, list[dict[str, Any]]]:
+def compare_rule_sets(left_rules: list[dict[str, Any]],
+                      right_rules: list[dict[str, Any]]
+                      ) -> dict[str, list[dict[str, Any]]]:
     left = {rule["term"]: rule for rule in left_rules}
     right = {rule["term"]: rule for rule in right_rules}
     terms = sorted(set(left) | set(right))
@@ -35,13 +34,12 @@ def compare_rule_sets(
             new_dropped.append({"term": term, "before": before, "after": after})
         if before["disposition"] == "drop" and after["disposition"] != "drop":
             gone_dropped.append({"term": term, "before": before, "after": after})
-        if (
-            before["disposition"] == "merge" or after["disposition"] == "merge"
-        ) and before["target"] != after["target"]:
+        if (before["disposition"] == "merge"
+                or after["disposition"] == "merge") \
+                and before["target"] != after["target"]:
             merge_changes.append({"term": term, "before": before, "after": after})
-        if (
-            before["disposition"] == "whitelist_exempt"
-        ) != (after["disposition"] == "whitelist_exempt"):
+        if (before["disposition"] == "whitelist_exempt"
+                ) != (after["disposition"] == "whitelist_exempt"):
             exemption_changes.append({"term": term, "before": before, "after": after})
     return {
         "new_dropped": new_dropped,
@@ -55,9 +53,7 @@ def _token_outcome(token: dict[str, Any]) -> dict[str, Any]:
     return {"disposition": token["disposition"], "target": token["target"]}
 
 
-def compare_texts(
-    left: dict[str, Any], right: dict[str, Any]
-) -> dict[str, Any]:
+def compare_texts(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     left_tokens = left["tokens"]
     right_tokens = right["tokens"]
     changes: list[dict[str, Any]] = []
@@ -66,25 +62,15 @@ def compare_texts(
         after = _token_outcome(right_tokens[index]) if index < len(right_tokens) else None
         if before != after:
             token = right_tokens[index] if index < len(right_tokens) else left_tokens[index]
-            changes.append(
-                {
-                    "index": index,
-                    "raw": token["raw"],
-                    "term": token["term"],
-                    "before": before,
-                    "after": after,
-                }
-            )
+            changes.append({"index": index, "raw": token["raw"],
+                            "term": token["term"], "before": before,
+                            "after": after})
     if left.get("text_hash") != right.get("text_hash"):
         changes = [
-            {
-                "index": token["index"],
-                "raw": token["raw"],
-                "term": token["term"],
-                "before": _token_outcome(left["tokens"][token["index"]])
-                if token["index"] < len(left["tokens"]) else None,
-                "after": _token_outcome(token),
-            }
+            {"index": token["index"], "raw": token["raw"], "term": token["term"],
+             "before": _token_outcome(left["tokens"][token["index"]])
+             if token["index"] < len(left["tokens"]) else None,
+             "after": _token_outcome(token)}
             for token in right["tokens"]
         ]
     return {
@@ -104,9 +90,8 @@ def _snapshot_map(records: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]
     return mapping
 
 
-def _side(store: LedgerStore, snapshot_ids: list[int]) -> tuple[
-    dict[str, Any], list[dict[str, Any]]
-]:
+def _side(store: LedgerStore, snapshot_ids: list[int]
+          ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     records = []
     for snapshot_id in snapshot_ids:
         record = store.get_snapshot(snapshot_id)
@@ -127,12 +112,9 @@ def _side(store: LedgerStore, snapshot_ids: list[int]) -> tuple[
     return compilation, records
 
 
-def build_impact_payload(
-    store: LedgerStore,
-    left_snapshot_ids: list[int],
-    right_snapshot_ids: list[int],
-    generated_at: str,
-) -> dict[str, Any]:
+def build_impact_payload(store: LedgerStore, left_snapshot_ids: list[int],
+                         right_snapshot_ids: list[int],
+                         generated_at: str) -> dict[str, Any]:
     if not left_snapshot_ids or not right_snapshot_ids:
         fail("E_BAD_FORMAT", "both impact sides require at least one snapshot")
     left_comp, left_records = _side(store, list(left_snapshot_ids))
@@ -168,38 +150,24 @@ def build_impact_payload(
 def _side_meta(compilation: dict[str, Any],
                records: list[dict[str, Any]]) -> dict[str, Any]:
     return {
-        "compilation": {
-            "name": compilation["name"],
-            "rules_hash": compilation["rules_hash"],
-            "scope": compilation["scope"],
-        },
+        "compilation": {"name": compilation["name"],
+                        "rules_hash": compilation["rules_hash"],
+                        "scope": compilation["scope"]},
         "snapshots": [
-            {
-                "id": record["id"],
-                "text_id": record["text_id"],
-                "result_hash": record["result_hash"],
-            }
+            {"id": record["id"], "text_id": record["text_id"],
+             "result_hash": record["result_hash"]}
             for record in records
         ],
     }
 
 
-def create_impact(
-    store: LedgerStore,
-    left_snapshot_ids: list[int],
-    right_snapshot_ids: list[int],
-    clock: FixedClock,
-    operator: str = "op-demo-01",
-) -> dict[str, Any]:
+def create_impact(store: LedgerStore, left_snapshot_ids: list[int],
+                  right_snapshot_ids: list[int], clock: FixedClock,
+                  operator: str = "op-demo-01") -> dict[str, Any]:
     refs = (list(left_snapshot_ids), list(right_snapshot_ids))
     payload = build_impact_payload(store, refs[0], refs[1], clock.timestamp())
     saved = store.save_impact(refs[0], refs[1], payload, operator,
                               clock.timestamp())
-    store.add_audit(
-        "impact.create",
-        payload["report_hash"][:16],
-        {"summary": payload["summary"]},
-        operator,
-        clock.timestamp(),
-    )
+    store.add_audit("impact.create", payload["report_hash"][:16],
+                    {"summary": payload["summary"]}, operator, clock.timestamp())
     return saved

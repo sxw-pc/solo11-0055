@@ -51,11 +51,9 @@ def _source_label(source: dict[str, Any] | None) -> str:
 
 
 def _metadata(payload: dict[str, Any]) -> list[str]:
-    keys = [
-        "kind", "name", "scope", "rules_hash", "declaration_hash",
-        "result_hash", "report_hash", "text_id", "generated_at", "created_at",
-        "status",
-    ]
+    keys = ["kind", "name", "scope", "rules_hash", "declaration_hash",
+            "result_hash", "report_hash", "text_id", "generated_at",
+            "created_at", "status"]
     rows = [(key, payload[key]) for key in keys if payload.get(key) is not None]
     if not rows:
         return []
@@ -67,12 +65,8 @@ def _compilation(payload: dict[str, Any]) -> list[str]:
     lines += ["## Tables and priority", ""]
     lines += _table(
         ["Table", "Version", "Kind", "Entries", "Content hash"],
-        [
-            (table["id"], table["version"], table["kind"], table["entry_count"],
-             table["content_hash"][:16])
-            for table in payload.get("tables", [])
-        ],
-    )
+        [(table["id"], table["version"], table["kind"], table["entry_count"],
+          table["content_hash"][:16]) for table in payload.get("tables", [])])
     lines += ["", f"Priority (high to low): {', '.join(payload.get('priority', []))}", ""]
     lines += ["## Effective rules", ""]
     rows = []
@@ -80,12 +74,9 @@ def _compilation(payload: dict[str, Any]) -> list[str]:
         overrides = ", ".join(
             f"{item['source']['table_id']}@v{item['source']['version']}"
             f":{item['disposition']}"
-            for item in rule.get("overridden_by", [])
-        )
-        rows.append(
-            (rule["term"], rule["disposition"], rule["target"],
-             _source_label(rule["source"]), overrides or "-")
-        )
+            for item in rule.get("overridden_by", []))
+        rows.append((rule["term"], rule["disposition"], rule["target"],
+                     _source_label(rule["source"]), overrides or "-"))
     lines += _table(["Term", "Disposition", "Target", "Decision source",
                      "Overridden by"], rows)
     counts = payload.get("disposition_counts", {})
@@ -104,11 +95,10 @@ def _snapshot(payload: dict[str, Any]) -> list[str]:
     rows = []
     for token in payload.get("tokens", []):
         overrides = len(token.get("overridden_by", []))
-        rows.append(
-            (token["index"], token["raw"], f"{token['start']}..{token['end']}",
-             token["term"], token["disposition"], token["target"],
-             _source_label(token.get("source")), overrides or "-")
-        )
+        rows.append((token["index"], token["raw"],
+                     f"{token['start']}..{token['end']}", token["term"],
+                     token["disposition"], token["target"],
+                     _source_label(token.get("source")), overrides or "-"))
     lines += _table(["#", "Raw", "Offsets", "Normalized", "Disposition",
                      "Target", "Source", "Overrides"], rows)
     return lines
@@ -127,22 +117,13 @@ def _check(payload: dict[str, Any]) -> list[str]:
         return lines
     lines += _table(
         ["Code", "Name", "Severity", "Subject", "Message"],
-        [
-            (finding["code"], finding["name"], finding["severity"],
-             finding["subject"], finding["message"])
-            for finding in payload["findings"]
-        ],
-    )
+        [(finding["code"], finding["name"], finding["severity"],
+          finding["subject"], finding["message"])
+         for finding in payload["findings"]])
     lines += ["", "### Finding details", ""]
     for finding in payload["findings"]:
-        lines += [
-            f"#### {finding['code']} {finding['subject']}",
-            "",
-            "```json",
-            canonical_json(finding["details"]),
-            "```",
-            "",
-        ]
+        lines += [f"#### {finding['code']} {finding['subject']}", "",
+                  "```json", canonical_json(finding["details"]), "```", ""]
     return lines
 
 
@@ -186,18 +167,13 @@ def _impact(payload: dict[str, Any]) -> list[str]:
     if not affected:
         lines.append("No token outcomes changed.")
     for item in affected:
-        lines += [
-            f"### {item['text_id']} ({item['affected_tokens']} affected tokens)",
-            "",
-        ]
+        lines += [f"### {item['text_id']} ({item['affected_tokens']} affected tokens)",
+                  ""]
         lines += _table(
             ["#", "Raw", "Term", "Before", "After"],
-            [
-                (change["index"], change["raw"], change["term"],
-                 _outcome(change["before"]), _outcome(change["after"]))
-                for change in item["changes"]
-            ],
-        )
+            [(change["index"], change["raw"], change["term"],
+              _outcome(change["before"]), _outcome(change["after"]))
+             for change in item["changes"]])
         lines.append("")
     return lines
 

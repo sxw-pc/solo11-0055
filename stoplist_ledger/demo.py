@@ -55,19 +55,17 @@ def register_fixtures(store: LedgerStore, clock: FixedClock,
     paths = sorted(
         [path for path in (FIXTURES / "stoplists").iterdir()
          if path.suffix.lower() in {".txt", ".yaml", ".yml"}],
-        key=lambda path: path.name,
-    )
+        key=lambda path: path.name)
     registered = []
     for path in paths:
-        registered.append(
-            register_file(store, path, clock, operator=operator,
-                          allow_existing=True)
-        )
+        registered.append(register_file(store, path, clock, operator=operator,
+                                        allow_existing=True))
     return registered
 
 
 def _report(payload: dict[str, Any], report_dir: Path, kind: str,
-            identifier: str, formats: tuple[str, ...] = ("json", "md")) -> list[str]:
+            identifier: str,
+            formats: tuple[str, ...] = ("json", "md")) -> list[str]:
     artifacts = []
     for fmt in formats:
         path = default_report_path(report_dir, kind, identifier, fmt)
@@ -93,12 +91,8 @@ def run_demo(var_dir: Path, clock: FixedClock,
     )
     snaps_b = snapshot_many(store, comp_b["id"], texts, clock, operator)
     impact = create_impact(
-        store,
-        [snapshot["id"] for snapshot in snaps_a],
-        [snapshot["id"] for snapshot in snaps_b],
-        clock,
-        operator,
-    )
+        store, [snapshot["id"] for snapshot in snaps_a],
+        [snapshot["id"] for snapshot in snaps_b], clock, operator)
     check_a = check_declaration(
         store, FIXTURES / "declarations" / "pipeline_a.yaml", clock, operator
     )
@@ -140,10 +134,9 @@ def run_demo(var_dir: Path, clock: FixedClock,
         "checks": {
             comp_a["name"]: {"id": check_a["id"], "status": check_a["status"],
                              "total_issues": check_a["summary"]["total_issues"]},
-            "broken-conflict": {"id": check_broken["id"],
-                                "status": check_broken["status"],
-                                "total_issues":
-                                    check_broken["summary"]["total_issues"]},
+            "broken-conflict": {
+                "id": check_broken["id"], "status": check_broken["status"],
+                "total_issues": check_broken["summary"]["total_issues"]},
         },
     }
     summary_paths = []

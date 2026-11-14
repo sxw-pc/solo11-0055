@@ -69,6 +69,11 @@ tree; any path outside it is refused.
   texts and affected token counts.
 - **Check** eight consistency classes with stable codes and persist every report
   in the ledger.
+- **Rebuild** the lineage of any registered `table@version`: entry-level
+  changes are replayed from the table's first version, so each current entry
+  carries its introducing version and its rename/retarget chain. Gaps in the
+  version chain fail with `E_LINEAGE_GAP` instead of silently substituting
+  another version.
 - **Browse** the ledger through a local, read-only HTML page and JSON endpoints.
 
 ## CLI surface
@@ -83,6 +88,7 @@ python -m stoplist_ledger [--var-dir var] [--operator op-demo-01] [--now ISO] \
   diff --left-compilation ID --right-compilation ID [--format json|md]
   diff --left SNAPSHOT_IDS... --right SNAPSHOT_IDS... [--format json|md]
   check DECLARATION [--format json|md] [--out PATH]
+  lineage TABLE[@vVERSION] [--version N] [--format json|md] [--out PATH]
   report --kind compilation|snapshot|check|impact --id ID [--format ...]
   serve [--host 127.0.0.1] [--port 5000]
   demo
@@ -127,6 +133,7 @@ are generic function-word examples rather than corpus excerpts.
 | `E_DUP_VERSION` | Table id/version exists with different content |
 | `E_DUP_PRIORITY` | Priority list repeats a table id |
 | `E_REF_NOT_FOUND` | Referenced table version, compilation or snapshot is missing |
+| `E_LINEAGE_GAP` | Version chain has gaps, so lineage cannot be rebuilt |
 | `E_MERGE_TARGET_NOT_ALLOWED` | Merge target falls outside the declared allow-list |
 | `E_DECL_INVALID` | Declaration is structurally invalid |
 | `E_CONFIRM_REQUIRED` | `reset` was called without `--yes` |

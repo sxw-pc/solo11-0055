@@ -14,6 +14,7 @@ ERROR_CODES: dict[str, str] = {
     "E_DUP_VERSION": "The table id and version already exist with different content",
     "E_DUP_PRIORITY": "A priority list contains a duplicate table id",
     "E_REF_NOT_FOUND": "A referenced table, version, compilation or snapshot is missing",
+    "E_LINEAGE_GAP": "A table version chain has gaps and cannot be replayed",
     "E_MERGE_TARGET_NOT_ALLOWED": "A merge target is outside the declared allow-list",
     "E_DECL_INVALID": "The declaration is structurally invalid",
     "E_CONFIRM_REQUIRED": "A destructive reset requires explicit confirmation",

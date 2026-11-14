@@ -34,7 +34,8 @@ def infer_kind(path: Path, explicit: str | None = None) -> str:
     suffix = path.suffix.lower()
     if explicit is not None:
         if explicit not in KINDS:
-            fail("E_BAD_FORMAT", "unknown table kind", kind=explicit, allowed=list(KINDS))
+            fail("E_BAD_FORMAT", "unknown table kind", kind=explicit,
+                 allowed=list(KINDS))
         kind = explicit
     elif suffix in {".yaml", ".yml"}:
         kind = "synonym"
@@ -51,7 +52,8 @@ def infer_kind(path: Path, explicit: str | None = None) -> str:
     if kind == "synonym" and suffix not in {".yaml", ".yml"}:
         fail("E_BAD_FORMAT", "synonym tables must be YAML mappings", path=path.name)
     if suffix in {".yaml", ".yml"} and kind != "synonym":
-        fail("E_BAD_FORMAT", "YAML tables are reserved for synonym mappings", path=path.name)
+        fail("E_BAD_FORMAT", "YAML tables are reserved for synonym mappings",
+             path=path.name)
     return kind
 
 
@@ -65,13 +67,8 @@ def parse_table(path: Path, kind: str,
     else:
         entries = _parse_txt_terms(lines, policy)
     terms = {entry["term"] for entry in entries}
-    return ParsedTable(
-        kind=kind,
-        entries=entries,
-        line_count=len(lines),
-        comment_count=comment_count,
-        term_count=len(terms),
-    )
+    return ParsedTable(kind=kind, entries=entries, line_count=len(lines),
+                       comment_count=comment_count, term_count=len(terms))
 
 
 def _parse_txt_terms(lines: list[str],
@@ -99,23 +96,12 @@ def _parse_synonym_yaml(text: str, policy: NormalizationPolicy,
     entries: list[dict[str, Any]] = []
     for logical_line, (source, target) in enumerate(loaded.items(), start=1):
         if not isinstance(source, str) or not isinstance(target, str):
-            fail(
-                "E_BAD_FORMAT",
-                "synonym keys and targets must be strings",
-                line=logical_line,
-                source_type=type(source).__name__,
-                target_type=type(target).__name__,
-            )
+            fail("E_BAD_FORMAT", "synonym keys and targets must be strings",
+                 line=logical_line, source_type=type(source).__name__,
+                 target_type=type(target).__name__)
         term, normalized_target = policy.validate_mapping_entry(source, target)
-        entries.append(
-            {
-                "line": logical_line,
-                "raw": source,
-                "term": term,
-                "target_raw": target,
-                "target": normalized_target,
-            }
-        )
+        entries.append({"line": logical_line, "raw": source, "term": term,
+                        "target_raw": target, "target": normalized_target})
     return entries
 
 
@@ -135,11 +121,9 @@ def diff_entries(previous: list[dict[str, Any]] | None,
         return {
             "base_version": None,
             "added": [entry["line"] for entry in current],
-            "removed": [],
-            "modified": [],
+            "removed": [], "modified": [],
             "added_count": len(current),
-            "removed_count": 0,
-            "modified_count": 0,
+            "removed_count": 0, "modified_count": 0,
         }
     old_sigs, new_sigs = _signatures(previous), _signatures(current)
     matcher = difflib.SequenceMatcher(None, old_sigs, new_sigs, autojunk=False)
@@ -152,10 +136,8 @@ def diff_entries(previous: list[dict[str, Any]] | None,
         if tag == "replace":
             pairs = min(i2 - i1, j2 - j1)
             for offset in range(pairs):
-                modified.append(
-                    {"old": previous[i1 + offset]["line"],
-                     "new": current[j1 + offset]["line"]}
-                )
+                modified.append({"old": previous[i1 + offset]["line"],
+                                 "new": current[j1 + offset]["line"]})
             removed.extend(entry["line"] for entry in previous[i1 + pairs:i2])
             added.extend(entry["line"] for entry in current[j1 + pairs:j2])
         elif tag == "delete":
@@ -173,11 +155,16 @@ def diff_entries(previous: list[dict[str, Any]] | None,
     }
 
 
+def entry_identity(entry: dict[str, Any]) -> tuple[str, str | None]:
+    """Semantic identity of one entry: normalized term and optional target."""
+    return (entry["term"], entry.get("target"))
+
+
 def _content_hash(kind: str, entries: list[dict[str, Any]]) -> str:
     if kind == "synonym":
         payload = {
             "kind": kind,
-            "map": sorted([entry["term"], entry["target"]] for entry in entries),
+            "map": sorted(entry_identity(entry) for entry in entries),
         }
     else:
         payload = {"kind": kind, "terms": [entry["term"] for entry in entries]}
@@ -191,27 +178,19 @@ def infer_identity(path: Path, table_id: str | None,
     inferred_version = int(match.group("version")) if match else None
     resolved_table = table_id or inferred_table
     if not resolved_table or not _TABLE_RE.fullmatch(resolved_table):
-        fail(
-            "E_BAD_FORMAT",
-            "table id is missing or invalid; use <id>_v<version>.<ext>",
-            filename=path.name,
-        )
+        fail("E_BAD_FORMAT",
+             "table id is missing or invalid; use <id>_v<version>.<ext>",
+             filename=path.name)
     if version is not None and (not isinstance(version, int) or version < 1):
         fail("E_BAD_FORMAT", "version must be a positive integer", version=version)
     return resolved_table, version if version is not None else inferred_version
 
 
-def register_file(
-    store: LedgerStore,
-    path: Path,
-    clock: FixedClock,
-    operator: str = "op-demo-01",
-    kind: str | None = None,
-    table_id: str | None = None,
-    version: int | None = None,
-    policy: NormalizationPolicy | None = None,
-    allow_existing: bool = False,
-) -> dict[str, Any]:
+def register_file(store: LedgerStore, path: Path, clock: FixedClock,
+                  operator: str = "op-demo-01", kind: str | None = None,
+                  table_id: str | None = None, version: int | None = None,
+                  policy: NormalizationPolicy | None = None,
+                  allow_existing: bool = False) -> dict[str, Any]:
     """Register one local table file; content duplicates are rejected by default."""
 
     path = Path(path)
@@ -228,53 +207,35 @@ def register_file(
 
     existing_content = store.find_by_content(content_hash)
     if existing_content:
-        same_slot = (
-            existing_content["table_id"] == resolved_table
-            and existing_content["version"] == requested_version
-        )
+        same_slot = (existing_content["table_id"] == resolved_table
+                     and existing_content["version"] == requested_version)
         if allow_existing and same_slot:
             return existing_content
-        fail(
-            "E_DUP_CONTENT",
-            "identical normalized content is already registered",
-            existing_table=existing_content["table_id"],
-            existing_version=existing_content["version"],
-            content_hash=content_hash,
-        )
+        fail("E_DUP_CONTENT",
+             "identical normalized content is already registered",
+             existing_table=existing_content["table_id"],
+             existing_version=existing_content["version"],
+             content_hash=content_hash)
     if store.get_version(resolved_table, requested_version):
-        fail(
-            "E_DUP_VERSION",
-            "table version exists with different content",
-            table_id=resolved_table,
-            version=requested_version,
-        )
+        fail("E_DUP_VERSION", "table version exists with different content",
+             table_id=resolved_table, version=requested_version)
 
     latest = store.latest_version(resolved_table)
     diff = diff_entries(latest["entries"] if latest else None, parsed.entries)
     diff["base_version"] = latest["version"] if latest else None
     record = {
-        "table_id": resolved_table,
-        "version": requested_version,
-        "kind": resolved_kind,
-        "source_path": display_path(path),
-        "policy": resolved_policy.to_dict(),
-        "content_hash": content_hash,
-        "line_count": parsed.line_count,
-        "entry_count": len(parsed.entries),
-        "term_count": parsed.term_count,
-        "comment_count": parsed.comment_count,
-        "entries": parsed.entries,
-        "diff": diff,
-        "operator": operator,
+        "table_id": resolved_table, "version": requested_version,
+        "kind": resolved_kind, "source_path": display_path(path),
+        "policy": resolved_policy.to_dict(), "content_hash": content_hash,
+        "line_count": parsed.line_count, "entry_count": len(parsed.entries),
+        "term_count": parsed.term_count, "comment_count": parsed.comment_count,
+        "entries": parsed.entries, "diff": diff, "operator": operator,
         "created_at": clock.timestamp(),
     }
     saved = store.insert_version(record)
     store.add_audit(
-        "table.register",
-        f"{resolved_table}@v{requested_version}",
+        "table.register", f"{resolved_table}@v{requested_version}",
         {"content_hash": content_hash, "kind": resolved_kind,
          "entry_count": len(parsed.entries)},
-        operator,
-        clock.timestamp(),
-    )
+        operator, clock.timestamp())
     return saved

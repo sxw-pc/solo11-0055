@@ -12,13 +12,8 @@ from .normalizer import NormalizationPolicy
 from .store import LedgerStore
 from .util import display_path, file_sha256, read_text, stable_hash
 
-DEFAULT_SOURCE = {
-    "table_id": None,
-    "version": 0,
-    "kind": "default",
-    "line": 0,
-    "rule": "default:keep",
-}
+DEFAULT_SOURCE = {"table_id": None, "version": 0, "kind": "default", "line": 0,
+                  "rule": "default:keep"}
 
 
 def tokenize(text: str) -> list[dict[str, Any]]:
@@ -43,18 +38,11 @@ def tokenize(text: str) -> list[dict[str, Any]]:
 
 def _decision(rule: dict[str, Any] | None, raw: str) -> dict[str, Any]:
     if rule is None:
-        return {
-            "disposition": "keep",
-            "target": None,
-            "source": DEFAULT_SOURCE | {"raw": raw},
-            "overridden_by": [],
-        }
-    return {
-        "disposition": rule["disposition"],
-        "target": rule["target"],
-        "source": rule["source"],
-        "overridden_by": rule.get("overridden_by", []),
-    }
+        return {"disposition": "keep", "target": None,
+                "source": DEFAULT_SOURCE | {"raw": raw}, "overridden_by": []}
+    return {"disposition": rule["disposition"], "target": rule["target"],
+            "source": rule["source"],
+            "overridden_by": rule.get("overridden_by", [])}
 
 
 def build_snapshot(compilation: dict[str, Any], text_path: Path,
@@ -64,12 +52,9 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         fail("E_IO", "text fixture does not exist", path=str(text_path))
     effective_scope = scope or compilation["scope"]
     if effective_scope != compilation["scope"]:
-        fail(
-            "E_BAD_FORMAT",
-            "snapshot scope must match the compiled scope",
-            compilation_scope=compilation["scope"],
-            requested_scope=effective_scope,
-        )
+        fail("E_BAD_FORMAT", "snapshot scope must match the compiled scope",
+             compilation_scope=compilation["scope"],
+             requested_scope=effective_scope)
     text = read_text(text_path)
     policy = NormalizationPolicy.from_mapping(compilation["normalization"])
     rules = {rule["term"]: rule for rule in compilation["rules"]}
@@ -79,24 +64,15 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
         term = policy.normalize_validated(token["raw"])
         decision = _decision(rules.get(term), token["raw"])
         counts[decision["disposition"]] += 1
-        token_rows.append(
-            {
-                "index": index,
-                "raw": token["raw"],
-                "start": token["start"],
-                "end": token["end"],
-                "term": term,
-                "disposition": decision["disposition"],
-                "target": decision["target"],
-                "source": decision["source"],
-                "overridden_by": decision["overridden_by"],
-            }
-        )
-    summary = {
-        "token_count": len(token_rows),
-        **counts,
-        "affected": len(token_rows) - counts["keep"],
-    }
+        token_rows.append({
+            "index": index, "raw": token["raw"], "start": token["start"],
+            "end": token["end"], "term": term,
+            "disposition": decision["disposition"], "target": decision["target"],
+            "source": decision["source"],
+            "overridden_by": decision["overridden_by"],
+        })
+    summary = {"token_count": len(token_rows), **counts,
+               "affected": len(token_rows) - counts["keep"]}
     semantic = {
         "kind": "snapshot",
         "schema_version": 1,
@@ -116,14 +92,9 @@ def build_snapshot(compilation: dict[str, Any], text_path: Path,
     return semantic | {"result_hash": stable_hash(semantic)}
 
 
-def snapshot_text(
-    store: LedgerStore,
-    compilation_id: int,
-    text_path: Path,
-    clock: FixedClock,
-    operator: str = "op-demo-01",
-    scope: str | None = None,
-) -> dict[str, Any]:
+def snapshot_text(store: LedgerStore, compilation_id: int, text_path: Path,
+                  clock: FixedClock, operator: str = "op-demo-01",
+                  scope: str | None = None) -> dict[str, Any]:
     compilation = store.get_compilation(compilation_id)
     if compilation is None:
         fail("E_REF_NOT_FOUND", "compilation does not exist",
@@ -144,19 +115,13 @@ def snapshot_text(
         f"{compilation['name']}:{semantic['text_id']}:{semantic['result_hash'][:12]}",
         {"token_count": semantic["summary"]["token_count"],
          "affected": semantic["summary"]["affected"]},
-        operator,
-        clock.timestamp(),
-    )
+        operator, clock.timestamp())
     return saved
 
 
-def snapshot_many(
-    store: LedgerStore,
-    compilation_id: int,
-    text_paths: Iterable[Path],
-    clock: FixedClock,
-    operator: str = "op-demo-01",
-) -> list[dict[str, Any]]:
+def snapshot_many(store: LedgerStore, compilation_id: int,
+                  text_paths: Iterable[Path], clock: FixedClock,
+                  operator: str = "op-demo-01") -> list[dict[str, Any]]:
     paths = sorted((Path(path) for path in text_paths), key=lambda p: p.name)
     return [snapshot_text(store, compilation_id, path, clock, operator)
             for path in paths]

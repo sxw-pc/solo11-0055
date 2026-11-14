@@ -13,6 +13,7 @@ from .compiler import compile_declaration
 from .demo import demo_main, safe_reset
 from .errors import LedgerError, fail
 from .impact import create_impact
+from .lineage import reconstruct_lineage
 from .registry import register_file
 from .report import default_report_path, write_report
 from .snapshot import snapshot_many, snapshot_text
@@ -25,8 +26,7 @@ DEFAULT_VAR = Path("var")
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m stoplist_ledger",
-        description="Offline version governance for stoplists and synonym tables.",
-    )
+        description="Offline version governance for stoplists and synonym tables.")
     parser.add_argument("--var-dir", default=str(DEFAULT_VAR),
                         help="local ledger and artifact directory (default: var)")
     parser.add_argument("--operator", default="op-demo-01",
@@ -72,6 +72,12 @@ def build_parser() -> argparse.ArgumentParser:
     check_cmd.add_argument("declaration", type=Path)
     _report_args(check_cmd)
 
+    lineage_cmd = commands.add_parser(
+        "lineage", help="rebuild the version lineage of a table")
+    lineage_cmd.add_argument("table", help="table id, optionally <id>@v<version>")
+    lineage_cmd.add_argument("--version", type=int)
+    _report_args(lineage_cmd)
+
     report_cmd = commands.add_parser("report", help="render a stored record")
     report_cmd.add_argument("--kind", required=True,
                             choices=["compilation", "snapshot", "check", "impact"])
@@ -110,9 +116,7 @@ def _emit_report(record: dict[str, Any], args: argparse.Namespace,
 
 
 def _resolve_compilation(store: LedgerStore, value: str) -> dict[str, Any]:
-    record = None
-    if value.isdigit():
-        record = store.get_compilation(int(value))
+    record = store.get_compilation(int(value)) if value.isdigit() else None
     if record is None:
         record = store.latest_compilation(value)
     if record is None:
@@ -188,10 +192,9 @@ def dispatch(args: argparse.Namespace) -> int:
         outputs = []
         for record in records:
             out = args.out_dir or var_dir / "reports"
-            path = default_report_path(
-                out, "snapshot",
-                f"{compilation['name']}_{record['text_id']}", args.format
-            )
+            path = default_report_path(out, "snapshot",
+                                       f"{compilation['name']}_{record['text_id']}",
+                                       args.format)
             write_report(record, args.format, path)
             outputs.append({"id": record["id"], "text_id": record["text_id"],
                             "result_hash": record["result_hash"],
@@ -203,6 +206,21 @@ def dispatch(args: argparse.Namespace) -> int:
         path = _emit_report(record, args, args.declaration.stem, var_dir)
         print(pretty_json({"id": record["id"], "status": record["status"],
                            "total_issues": record["summary"]["total_issues"],
+                           "report": str(path)}), end="")
+        return 0
+    if args.command == "lineage":
+        table_id, _, suffix = args.table.partition("@")
+        version = args.version
+        if suffix:
+            if version is not None or not suffix.lstrip("v").isdigit():
+                fail("E_BAD_FORMAT", "use <table>@v<version> or --version")
+            version = int(suffix.lstrip("v"))
+        record = reconstruct_lineage(store, table_id, version)
+        path = _emit_report(record, args, f"{table_id}_v{record['version']}",
+                            var_dir)
+        print(pretty_json({"table_id": record["table_id"],
+                           "version": record["version"],
+                           "entry_count": record["entry_count"],
                            "report": str(path)}), end="")
         return 0
     if args.command == "diff":
@@ -217,12 +235,9 @@ def dispatch(args: argparse.Namespace) -> int:
                            "report": str(path)}), end="")
         return 0
     if args.command == "report":
-        getter = {
-            "compilation": store.get_compilation,
-            "snapshot": store.get_snapshot,
-            "check": store.get_check,
-            "impact": store.get_impact,
-        }[args.kind]
+        getter = {"compilation": store.get_compilation,
+                  "snapshot": store.get_snapshot, "check": store.get_check,
+                  "impact": store.get_impact}[args.kind]
         record = getter(args.id)
         if record is None:
             fail("E_REF_NOT_FOUND", "record does not exist",

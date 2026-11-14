@@ -16,28 +16,15 @@ def canonical_json(value: Any) -> str:
     """Canonical bytes-ready JSON: sorted keys, no cosmetic whitespace."""
 
     try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        )
+        return json.dumps(value, ensure_ascii=False, sort_keys=True,
+                          separators=(",", ":"), allow_nan=False)
     except (TypeError, ValueError) as exc:
         fail("E_BAD_FORMAT", f"value is not JSON serializable: {exc}")
 
 
 def pretty_json(value: Any) -> str:
-    return (
-        json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            indent=2,
-            allow_nan=False,
-        )
-        + "\n"
-    )
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2,
+                      allow_nan=False) + "\n"
 
 
 def stable_hash(value: Any) -> str:
